@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { playerAPI } from '../services/api';
 import { toast } from 'react-hot-toast';
 
@@ -8,9 +8,10 @@ export const usePuzzles = () => {
   const [puzzleDates, setPuzzleDates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const initRef = useRef(false);
 
   // Fetch today's puzzles
-  const fetchTodaysPuzzles = async () => {
+  const fetchTodaysPuzzles = useCallback(async () => {
     try {
       setLoading(true);
       const response = await playerAPI.getTodaysPuzzles();
@@ -25,7 +26,7 @@ export const usePuzzles = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch puzzles by date
   const fetchPuzzlesByDate = async (date) => {
@@ -78,8 +79,11 @@ export const usePuzzles = () => {
 
   // Initialize data
   useEffect(() => {
-    fetchTodaysPuzzles();
-    fetchPuzzleDates();
+    if (!initRef.current) {
+      initRef.current = true;
+      fetchTodaysPuzzles();
+      fetchPuzzleDates();
+    }
   }, []);
 
   return {
