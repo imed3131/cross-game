@@ -52,7 +52,7 @@ const PlayerPage = () => {
 
   // Show celebration when puzzle is completed
   useEffect(() => {
-    if (isCompleted && !showCelebration) {
+    if (isCompleted && !showCelebration && selectedPuzzle?.id) {
       setShowCelebration(true);
       
       // Submit solution
@@ -72,7 +72,7 @@ const PlayerPage = () => {
       
       submitCompletion();
     }
-  }, [isCompleted, showCelebration, currentGrid, selectedPuzzle, getElapsedTime, submitSolution]);
+  }, [isCompleted, showCelebration, selectedPuzzle?.id]); // Removed function dependencies causing infinite loops
 
   // Handle date selection
   const handleDateSelect = (date) => {
