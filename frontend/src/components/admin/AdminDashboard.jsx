@@ -100,9 +100,9 @@ const AdminDashboard = () => {
   ];
 
   // Distribution des langages (votre métrique #1)
-  const totalPuzzles = (stats.arabicPuzzles + stats.frenchPuzzles) || 1;
-  const arabicPercent = Math.round((stats.arabicPuzzles / totalPuzzles) * 100);
-  const frenchPercent = 100 - arabicPercent;
+  const totalPuzzles = stats.arabicPuzzles + stats.frenchPuzzles;
+  const arabicPercent = totalPuzzles > 0 ? Math.round((stats.arabicPuzzles / totalPuzzles) * 100) : 0;
+  const frenchPercent = totalPuzzles > 0 ? 100 - arabicPercent : 0;
 
   const colorClasses = {
     blue: 'bg-blue-50 border-blue-200 text-blue-800',
