@@ -1,7 +1,10 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "version": 2,
+  "name": "crossword-game",
+  "buildCommand": "cd frontend && npm ci && npm run build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "npm install",
+  "installCommand": "cd frontend && npm ci",
+  "framework": "vite",
   "rewrites": [
     {
       "source": "/(.*)",
