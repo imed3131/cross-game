@@ -105,17 +105,20 @@ const gameReducer = (state, action) => {
       };
       
     case GAME_ACTIONS.PAUSE_TIMER:
+      const currentElapsed = state.startTime ? Math.floor((new Date() - new Date(state.startTime)) / 1000) : 0;
       return {
         ...state,
         isPaused: true,
-        pausedTime: state.pausedTime + (state.startTime ? Math.floor((new Date() - new Date(state.startTime)) / 1000) : 0),
+        pausedTime: (state.pausedTime || 0) + currentElapsed,
+        // Do not set startTime to null
       };
       
     case GAME_ACTIONS.RESUME_TIMER:
       return {
         ...state,
         isPaused: false,
-        startTime: new Date(),
+        startTime: new Date(), // Resume from now
+        // pausedTime remains unchanged
       };
       
     case GAME_ACTIONS.RESET_TIMER:

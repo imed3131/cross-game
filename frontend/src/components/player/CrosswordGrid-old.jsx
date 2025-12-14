@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
-import { getIntersectingWords } from '../../utils/helpers';
 
 const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) => {
   const {
@@ -53,8 +52,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
   }
 
   const handleCellClick = (row, col) => {
-    const cell = currentGrid[row][col];
-    
     // Don't select black cells
     if (puzzle.solution[row][col] === '') return;
     
@@ -137,10 +134,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
     // - Horizontal clues are numbered by row (1-based)  
     // - Vertical clues are numbered by column (1-based)
     
-    // Check if this position should have a number based on the grid structure
-    // For now, we'll show numbers for positions that start words
-    // This is a simplified version - in a full crossword, numbering would be more complex
-    
     const rowNumber = row + 1; // Convert to 1-based
     const colNumber = col + 1; // Convert to 1-based
     
@@ -162,7 +155,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
     return (
       <div className="grid gap-1 p-4 bg-white rounded-2xl shadow-lg">
         <div className="text-center text-gray-500 p-8">
-          Pas de parite 
+          Pas de partie
         </div>
       </div>
     );
@@ -216,90 +209,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
               gridTemplateColumns: `repeat(${puzzle.cols || gridSize}, minmax(0, 1fr))`
             }}
           >
-      {currentGrid?.map((row, rowIndex) => {
-        if (!Array.isArray(row)) return null;
-        return row.map((cell, colIndex) => {
-          const isBlackCell = puzzle.solution?.[rowIndex]?.[colIndex] === '';
-          const isSelected = isCellSelected(rowIndex, colIndex);
-          const isHighlighted = isCellHighlighted(rowIndex, colIndex);
-          const isHovered = isCellHovered(rowIndex, colIndex);
-          const cellNumber = getCellNumber(rowIndex, colIndex);
-          const cellKey = `${rowIndex}-${colIndex}`;
-
-          return (
-            <motion.div
-              key={cellKey}
-              ref={(el) => {
-                if (el) {
-                  setCellRefs(prev => ({ ...prev, [cellKey]: el }));
-                }
-              }}
-              className={`
-                crossword-cell cursor-pointer relative
-                ${isBlackCell ? 'crossword-cell-black' : ''}
-                ${isSelected ? 'crossword-cell-active ring-2 ring-primary-400' : ''}
-                ${isHighlighted && !isSelected ? 'crossword-cell-highlighted' : ''}
-                ${isHovered && !isSelected && !isHighlighted ? 'bg-gray-100' : ''}
-                ${invalidInput && isSelected ? 'animate-shake bg-error-100 border-error-500' : ''}
-                ${showingSolution ? 'bg-green-50 border-green-300' : ''}
-              `}
-              onClick={() => !isBlackCell && handleCellClick(rowIndex, colIndex)}
-              onMouseEnter={() => handleCellMouseEnter(rowIndex, colIndex)}
-              onMouseLeave={handleCellMouseLeave}
-              tabIndex={isBlackCell ? -1 : 0}
-              whileHover={!isBlackCell ? { scale: 1.05 } : {}}
-              whileTap={!isBlackCell ? { scale: 0.95 } : {}}
-              animate={invalidInput && isSelected ? {
-                x: [-2, 2, -2, 2, 0],
-                transition: { duration: 0.4 }
-              } : {}}
-            >
-              {/* Cell number */}
-              {cellNumber && (
-                <span className="crossword-cell-number">
-                  {cellNumber}
-                </span>
-              )}
-              
-              {/* Cell content */}
-              {!isBlackCell && (
-                <AnimatePresence>
-                  {cell && (
-                    <motion.span
-                      key={cell}
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{ type: 'spring', duration: 0.2 }}
-                      className={`text-center font-bold ${language === 'AR' ? 'font-arabic' : ''}`}
-                    >
-                      {cell}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              )}
-              
-              {/* Selection indicator */}
-              {isSelected && (
-                <motion.div
-                  className="absolute inset-0 bg-primary-200 opacity-20 rounded"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', duration: 0.2 }}
-                />
-              )}
-              
-              {/* Word highlight */}
-              {isHighlighted && !isSelected && (
-                <motion.div
-                  className="absolute inset-0 bg-yellow-200 opacity-30 rounded"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.3 }}
-                  transition={{ duration: 0.2 }}
-                />
-              )}
-            </motion.div>
-          );
             {currentGrid?.map((row, rowIndex) => {
               if (!Array.isArray(row)) return null;
               return row.map((cell, colIndex) => {
@@ -319,33 +228,34 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
                       }
                     }}
                     className={`
-                      relative w-8 h-8 border-2 cursor-pointer font-bold text-sm
-                      flex items-center justify-center transition-all duration-200
-                      ${isBlackCell 
-                        ? 'bg-gray-900 border-gray-900' 
-                        : `bg-white border-gray-300 hover:border-primary-400 
-                           ${isSelected ? 'border-primary-600 bg-primary-50' : ''}
-                           ${isHighlighted ? 'bg-yellow-100 border-yellow-400' : ''}
-                           ${isHovered ? 'bg-gray-100' : ''}
-                           ${invalidInput ? 'animate-shake border-red-500' : ''}`
-                      }
+                      crossword-cell cursor-pointer relative
+                      ${isBlackCell ? 'crossword-cell-black' : ''}
+                      ${isSelected ? 'crossword-cell-active ring-2 ring-primary-400' : ''}
+                      ${isHovered && !isSelected && !isHighlighted ? 'bg-gray-100' : ''}
+                      ${invalidInput && isSelected ? 'animate-shake bg-error-100 border-error-500' : ''}
+                      ${showingSolution ? 'bg-green-50 border-green-300' : ''}
                     `}
-                    onClick={() => handleCellClick(rowIndex, colIndex)}
+                    onClick={() => !isBlackCell && handleCellClick(rowIndex, colIndex)}
                     onMouseEnter={() => handleCellMouseEnter(rowIndex, colIndex)}
                     onMouseLeave={handleCellMouseLeave}
-                    whileHover={{ scale: isBlackCell ? 1 : 1.05 }}
-                    whileTap={{ scale: isBlackCell ? 1 : 0.95 }}
+                    tabIndex={isBlackCell ? -1 : 0}
+                    whileHover={!isBlackCell ? { scale: 1.05 } : {}}
+                    whileTap={!isBlackCell ? { scale: 0.95 } : {}}
+                    animate={invalidInput && isSelected ? {
+                      x: [-2, 2, -2, 2, 0],
+                      transition: { duration: 0.4 }
+                    } : {}}
                   >
                     {/* Cell number */}
                     {cellNumber && (
-                      <span className="absolute top-0 left-0 text-xs font-bold text-primary-600 leading-none p-0.5">
+                      <span className="crossword-cell-number">
                         {cellNumber}
                       </span>
                     )}
                     
                     {/* Cell content */}
                     {!isBlackCell && (
-                      <AnimatePresence mode="wait">
+                      <AnimatePresence>
                         {cell && (
                           <motion.span
                             key={cell}
@@ -368,16 +278,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
                         initial={{ scale: 0 }}
                         animate={{ scale: 1 }}
                         transition={{ type: 'spring', duration: 0.2 }}
-                      />
-                    )}
-                    
-                    {/* Word highlight */}
-                    {isHighlighted && !isSelected && (
-                      <motion.div
-                        className="absolute inset-0 bg-yellow-200 opacity-30 rounded"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.3 }}
-                        transition={{ duration: 0.2 }}
                       />
                     )}
                   </motion.div>

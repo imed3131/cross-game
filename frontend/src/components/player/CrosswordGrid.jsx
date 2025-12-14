@@ -27,21 +27,21 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
-  const [localHighlightedCells, setLocalHighlightedCells] = useState([]);
-
-
   // Update timer every second - use state callback to avoid function dependency
+
   useEffect(() => {
     const interval = setInterval(() => {
-      // Use callback pattern to access current getElapsedTime without dependency
-      setCurrentTime(() => getElapsedTime());
+      setCurrentTime(getElapsedTime());
     }, 1000);
-
-    // Initial update
     setCurrentTime(getElapsedTime());
-
     return () => clearInterval(interval);
-  }, []); // Safe empty dependency - getElapsedTime accessed in callback
+  }, [getElapsedTime]);
+
+  // Update timer immediately after reset
+  const handleResetTimer = () => {
+    resetTimer();
+    setCurrentTime(0);
+  };
 
   // Handle cell value changes
   const handleCellChange = useCallback((value, row, col) => {
@@ -186,44 +186,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     setHoveredCell({ row: -1, col: -1 });
   };
 
-  // Effect to update local highlighting when selectedWord changes
-  useEffect(() => {
-    if (!selectedWord || !puzzle) {
-      setLocalHighlightedCells([]);
-      return;
-    }
-
-    const positions = [];
-    const { direction, number } = selectedWord;
-    // Use stable puzzle dimensions instead of currentGrid
-    const gridRows = puzzle.rows || 10;
-    const gridCols = puzzle.cols || 10;
-
-    if (direction === 'horizontal') {
-      // Highlight entire row
-      const targetRow = number - 1;
-      if (targetRow >= 0 && targetRow < gridRows) {
-        for (let col = 0; col < gridCols; col++) {
-          positions.push({ row: targetRow, col });
-        }
-      }
-    } else if (direction === 'vertical') {
-      // Highlight entire column
-      const targetCol = number - 1;
-      if (targetCol >= 0 && targetCol < gridCols) {
-        for (let row = 0; row < gridRows; row++) {
-          positions.push({ row, col: targetCol });
-        }
-      }
-    }
-
-    setLocalHighlightedCells(positions);
-  }, [selectedWord, puzzle?.rows, puzzle?.cols]);
-
-  const isCellHighlighted = (row, col) => {
-    return localHighlightedCells && localHighlightedCells.some(cell => cell && cell.row === row && cell.col === col);
-  };
-
   const isCellSelected = (row, col) => {
     return selectedCell && selectedCell.row === row && selectedCell.col === col;
   };
@@ -324,7 +286,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
               return row.map((cell, colIndex) => {
                 const isBlackCell = puzzle.solution?.[rowIndex]?.[colIndex] === '' || puzzle.solution?.[rowIndex]?.[colIndex] === '#';
                 const isSelected = isCellSelected(rowIndex, colIndex);
-                const isHighlighted = isCellHighlighted(rowIndex, colIndex);
                 const isHovered = isCellHovered(rowIndex, colIndex);
                 const cellNumber = getCellNumber(rowIndex, colIndex);
                 const cellKey = `${rowIndex}-${colIndex}`;
@@ -336,7 +297,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                     onChange={handleCellChange}
                     onNavigate={handleCellNavigation}
                     isSelected={isSelected}
-                    isHighlighted={isHighlighted}
                     isHovered={isHovered}
                     isBlackCell={isBlackCell}
                     cellNumber={cellNumber}
@@ -380,7 +340,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
           </button>
           
           <button
-            onClick={resetTimer}
+            onClick={handleResetTimer}
             className="p-2 hover:bg-gray-200 rounded-full transition-colors"
             title="Remettre à zéro le chrono"
           >

@@ -141,9 +141,8 @@ const CrosswordCell = ({
       className={`
         relative w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12
         border-2 transition-all duration-200
-        ${isSelected ? 'border-blue-500 bg-blue-50' : ''}
-        ${isHighlighted ? 'bg-yellow-100' : 'bg-white'}
-        ${isHovered ? 'bg-gray-50' : ''}
+        ${isSelected ? 'border-blue-500 bg-blue-50' : 'border-gray-300'}
+        ${isHovered ? 'bg-gray-50' : 'bg-white'}
         ${className}
       `}
       onClick={handleClick}
