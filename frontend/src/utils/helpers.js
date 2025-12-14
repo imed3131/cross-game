@@ -51,15 +51,12 @@ export const getWordPositions = (clue, grid) => {
   const positions = [];
   
   if (!clue || !grid || !Array.isArray(grid) || grid.length === 0) {
-    console.log('🔍 getWordPositions: Invalid input:', { clue, gridExists: !!grid, gridLength: grid?.length });
     return positions;
   }
   
   const { direction, number } = clue;
   const gridRows = grid.length;
   const gridCols = grid[0]?.length || 0;
-  
-  console.log('🔍 getWordPositions: Input:', { direction, number, gridRows, gridCols });
   
   if (direction === 'horizontal') {
     // Horizontal clue number corresponds to row number (1-based to 0-based)
@@ -71,7 +68,6 @@ export const getWordPositions = (clue, grid) => {
         positions.push({ row: targetRow, col });
       }
     }
-    console.log('🔍 getWordPositions: Horizontal row', targetRow, 'positions:', positions.length);
   } else if (direction === 'vertical') {
     // Vertical clue number corresponds to column number (1-based to 0-based)
     const targetCol = number - 1;
@@ -82,7 +78,6 @@ export const getWordPositions = (clue, grid) => {
         positions.push({ row, col: targetCol });
       }
     }
-    console.log('🔍 getWordPositions: Vertical col', targetCol, 'positions:', positions.length);
   }
   
   return positions;

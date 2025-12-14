@@ -33,7 +33,6 @@ const CluesPanel = ({
       direction
     };
 
-    console.log('🔍 CluesPanel: Sending word to onWordSelect:', word);
     onWordSelect?.(word);
   };
 

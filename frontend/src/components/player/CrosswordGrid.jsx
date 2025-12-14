@@ -26,6 +26,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
+  const [localHighlightedCells, setLocalHighlightedCells] = useState([]);
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -148,13 +149,41 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     setHoveredCell({ row: -1, col: -1 });
   };
 
-  const isCellHighlighted = (row, col) => {
-    const isHighlighted = highlightedCells && Array.isArray(highlightedCells) && highlightedCells.some(cell => cell && cell.row === row && cell.col === col);
-    // Only log for the first few cells to avoid spam
-    if (row === 0 && col === 0 && highlightedCells && highlightedCells.length > 0) {
-      console.log('🔍 CrosswordGrid: highlightedCells:', highlightedCells);
+  // Effect to update local highlighting when selectedWord changes
+  useEffect(() => {
+    if (!selectedWord || !puzzle) {
+      setLocalHighlightedCells([]);
+      return;
     }
-    return isHighlighted;
+
+    const positions = [];
+    const { direction, number } = selectedWord;
+    const gridRows = puzzle.rows || currentGrid?.length || 10;
+    const gridCols = puzzle.cols || currentGrid?.[0]?.length || 10;
+
+    if (direction === 'horizontal') {
+      // Highlight entire row
+      const targetRow = number - 1;
+      if (targetRow >= 0 && targetRow < gridRows) {
+        for (let col = 0; col < gridCols; col++) {
+          positions.push({ row: targetRow, col });
+        }
+      }
+    } else if (direction === 'vertical') {
+      // Highlight entire column
+      const targetCol = number - 1;
+      if (targetCol >= 0 && targetCol < gridCols) {
+        for (let row = 0; row < gridRows; row++) {
+          positions.push({ row, col: targetCol });
+        }
+      }
+    }
+
+    setLocalHighlightedCells(positions);
+  }, [selectedWord, puzzle, currentGrid]);
+
+  const isCellHighlighted = (row, col) => {
+    return localHighlightedCells && localHighlightedCells.some(cell => cell && cell.row === row && cell.col === col);
   };
 
   const isCellSelected = (row, col) => {

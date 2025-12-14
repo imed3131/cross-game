@@ -83,8 +83,16 @@ export const useCrosswordGame = () => {
 
     // Use currentGrid if available, otherwise fall back to puzzle solution for grid structure
     const gridToUse = state.currentGrid || state.currentPuzzle?.solution;
-    const positions = getWordPositions(word, gridToUse);
-    console.log('🔍 useCrosswordGame: selectWord called with:', { word, positions, gridSize: gridToUse?.length, usingFallback: !state.currentGrid });
+    
+    // If we still don't have a grid, create a dummy grid based on puzzle dimensions
+    let finalGrid = gridToUse;
+    if (!finalGrid && state.currentPuzzle) {
+      const rows = state.currentPuzzle.rows || 10;
+      const cols = state.currentPuzzle.cols || 10;
+      finalGrid = Array(rows).fill().map(() => Array(cols).fill(''));
+    }
+    
+    const positions = getWordPositions(word, finalGrid);
     
     dispatch({
       type: GAME_ACTIONS.SELECT_WORD,
