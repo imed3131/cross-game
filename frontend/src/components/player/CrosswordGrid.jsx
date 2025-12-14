@@ -275,7 +275,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         ? 'bg-black border-black' 
                         : `bg-white border-gray-400 hover:border-primary-400 shadow-sm
                            ${isSelected ? 'border-primary-600 bg-primary-50 shadow-md' : ''}
-                           ${isHighlighted ? 'bg-yellow-100 border-yellow-400' : ''}
+                           ${isHighlighted ? 'bg-yellow-50 border-yellow-300' : ''}
                            ${isHovered ? 'bg-gray-100' : ''}
                            ${invalidInput ? 'animate-shake border-red-500' : ''}`
                       }
@@ -328,9 +328,9 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                     {/* Word highlight */}
                     {isHighlighted && !isSelected && (
                       <motion.div
-                        className="absolute inset-0 bg-yellow-200 opacity-30 rounded"
+                        className="absolute inset-0 bg-yellow-100 opacity-40 rounded"
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.3 }}
+                        animate={{ opacity: 0.4 }}
                         transition={{ duration: 0.2 }}
                       />
                     )}
@@ -346,36 +346,41 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         <div className="inline-flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
           <button
             onClick={() => isPaused ? resumeTimer() : pauseTimer()}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
             title={isPaused ? "Reprendre" : "Pause"}
           >
             {isPaused ? (
-              // Play icon
-              <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z"/>
+              // Modern Play icon - triangle in circle
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10"/>
+                <polygon fill="currentColor" points="10,8 16,12 10,16"/>
               </svg>
             ) : (
-              // Pause icon
-              <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+              // Modern Pause icon - two bars in circle
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="10" y1="15" x2="10" y2="9"/>
+                <line x1="14" y1="15" x2="14" y2="9"/>
               </svg>
             )}
           </button>
           
           <button
             onClick={resetTimer}
-            className="p-1 hover:bg-gray-200 rounded transition-colors"
-            title="Remettre à zéro"
+            className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+            title="Remettre à zéro le chrono"
           >
-            {/* Reset icon */}
-            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            {/* Modern Reset/Refresh icon */}
+            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
           </button>
           
-          <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12,6 12,12 16,14"></polyline>
+          {/* Modern Timer icon */}
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <circle cx="12" cy="13" r="8"/>
+            <path d="m12 9-2 3h4l-2-3"/>
+            <path d="M12 7V2m0 0L9 5m3-3 3 3"/>
           </svg>
           
           <span className={`text-sm font-medium ${isPaused ? 'text-orange-600' : 'text-gray-700'}`}>
@@ -385,15 +390,14 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
               return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             })()} {isPaused && '(Pause)'}
           </span>
-          {/* Reset game button moved here for clearer placement */}
+          
+          {/* Reset game button - clear French label */}
           <button
             onClick={() => externalResetGame && externalResetGame()}
-            className="ml-3 p-1 hover:bg-gray-200 rounded transition-colors"
-            title="Reset Game"
+            className="ml-4 px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium rounded transition-colors border border-red-300"
+            title="Réinitialiser la partie"
           >
-            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M4.581 9a8 8 0 1114.838 6" />
-            </svg>
+            Réinitialiser
           </button>
         </div>
       </div>
