@@ -81,8 +81,10 @@ export const useCrosswordGame = () => {
       return;
     }
 
-    const positions = getWordPositions(word, state.currentGrid);
-    console.log('🔍 useCrosswordGame: selectWord called with:', { word, positions, gridSize: state.currentGrid?.length });
+    // Use currentGrid if available, otherwise fall back to puzzle solution for grid structure
+    const gridToUse = state.currentGrid || state.currentPuzzle?.solution;
+    const positions = getWordPositions(word, gridToUse);
+    console.log('🔍 useCrosswordGame: selectWord called with:', { word, positions, gridSize: gridToUse?.length, usingFallback: !state.currentGrid });
     
     dispatch({
       type: GAME_ACTIONS.SELECT_WORD,
