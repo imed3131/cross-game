@@ -42,13 +42,46 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   // Auto-focus grid when cell is selected
   useEffect(() => {
     if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640;
+      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768; // Increased threshold
       
       if (isMobile) {
         // On mobile, focus the hidden input to show keyboard when user taps a cell
         // But only if we're not preventing focus (e.g., during calendar operations)
         if (!externalPreventMobileFocus && mobileInputRef.current) {
-          mobileInputRef.current.focus();
+          // Enhanced focus management for better mobile compatibility
+          const focusMobileInput = () => {
+            if (mobileInputRef.current && document.activeElement !== mobileInputRef.current) {
+              try {
+                // Clear any existing value first
+                mobileInputRef.current.value = '';
+                
+                // Focus with multiple strategies for different mobile browsers
+                mobileInputRef.current.focus({ preventScroll: true });
+                
+                // Some mobile browsers need a click trigger as well
+                setTimeout(() => {
+                  if (mobileInputRef.current) {
+                    mobileInputRef.current.click();
+                  }
+                }, 10);
+                
+              } catch (error) {
+                console.log('Focus attempt failed, retrying...', error);
+                // Retry once if first attempt fails
+                setTimeout(() => {
+                  if (mobileInputRef.current) {
+                    mobileInputRef.current.focus();
+                  }
+                }, 50);
+              }
+            }
+          };
+          
+          // Immediate focus attempt
+          focusMobileInput();
+          
+          // Backup focus attempt for stubborn mobile keyboards
+          setTimeout(focusMobileInput, 100);
         }
       } else {
         // Desktop behavior - focus the actual cell
@@ -89,6 +122,17 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     
     selectCell(row, col);
     onCellSelect?.(row, col);
+    
+    // Enhanced mobile keyboard focus after cell selection
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+    if (isMobile && !externalPreventMobileFocus && mobileInputRef.current) {
+      // Force focus on mobile input after cell selection
+      setTimeout(() => {
+        if (mobileInputRef.current) {
+          mobileInputRef.current.focus({ preventScroll: true });
+        }
+      }, 50);
+    }
     
     // Find intersecting words (adapted for simplified object format)
     const intersecting = [];
@@ -258,13 +302,91 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         ref={mobileInputRef}
         type="text"
         className="absolute -left-[9999px] opacity-0 pointer-events-none"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck="false"
+        inputMode="text"
+        onBlur={(e) => {
+          // Prevent losing focus on mobile when keyboard is needed
+          const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+          if (isMobile && selectedCell.row !== -1 && selectedCell.col !== -1 && !externalPreventMobileFocus) {
+            // Re-focus after a brief delay to maintain keyboard visibility
+            setTimeout(() => {
+              if (mobileInputRef.current && selectedCell.row !== -1 && selectedCell.col !== -1) {
+                mobileInputRef.current.focus({ preventScroll: true });
+              }
+            }, 100);
+          }
+        }}
+        onFocus={() => {
+          // Clear input when focused to ensure clean state
+          if (mobileInputRef.current) {
+            mobileInputRef.current.value = '';
+          }
+        }}
         onKeyDown={(e) => {
+          e.preventDefault();
           if (selectedCell.row !== -1 && selectedCell.col !== -1) {
             handleKeyInput(e.key);
           }
         }}
-        onChange={() => {}} // Prevent uncontrolled input warnings
-        value="" // Keep it empty since we handle input through handleKeyInput
+        onInput={(e) => {
+          // Handle input event for better mobile support
+          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
+            const value = e.target.value;
+            if (value && value.trim()) {
+              // Get the last character typed and clean it
+              const lastChar = value.slice(-1).trim();
+              if (lastChar && lastChar.match(/[a-zA-ZÀ-ÿ]/)) {
+                handleKeyInput(lastChar);
+              }
+            }
+          }
+          // Always clear the input to prevent accumulation
+          setTimeout(() => {
+            if (e.target) e.target.value = '';
+          }, 0);
+        }}
+        onChange={(e) => {
+          // Additional fallback for different mobile keyboards
+          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
+            const value = e.target.value;
+            if (value && value.trim()) {
+              const lastChar = value.slice(-1).trim();
+              if (lastChar && lastChar.match(/[a-zA-ZÀ-ÿ]/)) {
+                handleKeyInput(lastChar);
+              }
+            }
+          }
+          // Clear input
+          if (e.target) e.target.value = '';
+        }}
+        onCompositionEnd={(e) => {
+          // Handle complex input methods (predictive text, autocorrect, etc.)
+          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
+            const value = e.target.value || e.data || '';
+            if (value && value.trim()) {
+              const lastChar = value.slice(-1).trim();
+              if (lastChar && lastChar.match(/[a-zA-ZÀ-ÿ]/)) {
+                handleKeyInput(lastChar);
+              }
+            }
+          }
+          // Clear input
+          if (e.target) e.target.value = '';
+        }}
+        onBeforeInput={(e) => {
+          // Handle input before it's processed (modern browsers)
+          if (selectedCell.row !== -1 && selectedCell.col !== -1 && e.data) {
+            const char = e.data.trim();
+            if (char && char.match(/[a-zA-ZÀ-ÿ]/)) {
+              e.preventDefault();
+              handleKeyInput(char);
+            }
+          }
+        }}
+        value="" // Keep it empty since we handle input through multiple events
       />
       {/* Display puzzle info */}
       <div className="mb-4">

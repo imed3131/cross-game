@@ -118,28 +118,33 @@ export const useCrosswordGame = () => {
     
     if (row === -1 || col === -1 || !state.currentPuzzle) return;
 
-    if (key === 'Backspace') {
+    // Normalize the key input for better mobile compatibility
+    let normalizedKey = key;
+    
+    // Handle backspace variations
+    if (key === 'Backspace' || key === 'Delete' || key === '') {
       updateGridCell(row, col, '');
       return;
     }
 
-    if (key === 'Delete') {
-      updateGridCell(row, col, '');
-      return;
-    }
-
-    // Handle letter input
-    if (key.length === 1 && key.match(/[a-zA-ZÀ-ÿ\u0600-\u06FF]/)) {
-      const success = updateGridCell(row, col, key);
+    // Clean and normalize input for mobile keyboards
+    if (typeof key === 'string' && key.length > 0) {
+      // Take only the first character and clean it
+      normalizedKey = key.charAt(0).trim();
       
-      if (success && state.selectedWord) {
-        // Move to next cell in the word
-        const positions = getWordPositions(state.selectedWord, state.currentGrid);
-        const currentIndex = positions.findIndex(pos => pos.row === row && pos.col === col);
+      // Handle letter input - expanded regex for better mobile support
+      if (normalizedKey && normalizedKey.match(/[a-zA-ZÀ-ÿÀ-ž\u0100-\u017F\u0180-\u024F\u1E00-\u1EFF\u0600-\u06FF]/)) {
+        const success = updateGridCell(row, col, normalizedKey);
         
-        if (currentIndex >= 0 && currentIndex < positions.length - 1) {
-          const nextPos = positions[currentIndex + 1];
-          selectCell(nextPos.row, nextPos.col);
+        if (success && state.selectedWord) {
+          // Move to next cell in the word
+          const positions = getWordPositions(state.selectedWord, state.currentGrid);
+          const currentIndex = positions.findIndex(pos => pos.row === row && pos.col === col);
+          
+          if (currentIndex >= 0 && currentIndex < positions.length - 1) {
+            const nextPos = positions[currentIndex + 1];
+            selectCell(nextPos.row, nextPos.col);
+          }
         }
       }
     }
