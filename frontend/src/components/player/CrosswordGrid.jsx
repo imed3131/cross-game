@@ -69,15 +69,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     return () => clearInterval(interval);
   }, []); // Safe empty dependency - getElapsedTime accessed in callback
 
-  if (!puzzle) {
-    return (
-      <div className="grid gap-1 p-4 bg-white rounded-2xl shadow-lg">
-        <p className="text-gray-500">No puzzle loaded</p>
-      </div>
-    );
-  }
-
   const handleCellClick = (row, col) => {
+    if (!puzzle || !currentGrid) return; // Guard clause instead of early return
     const cell = currentGrid[row][col];
     
     // Don't select black cells
@@ -239,8 +232,17 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     );
   }
 
-  const gridSize = puzzle.gridSize || currentGrid.length;
+  const gridSize = puzzle?.gridSize || currentGrid?.length || 0;
   const isRTL = language === 'AR';
+
+  // Conditional rendering AFTER all hooks have been called
+  if (!puzzle) {
+    return (
+      <div className="grid gap-1 p-4 bg-white rounded-2xl shadow-lg">
+        <p className="text-gray-500">No puzzle loaded</p>
+      </div>
+    );
+  }
 
   return (
     <motion.div
