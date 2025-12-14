@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
 
-const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) => {
+const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: externalResetGame, preventMobileFocus: externalPreventMobileFocus = false, className = '' }) => {
   const {
     currentGrid,
     selectedCell,
@@ -22,10 +22,10 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
   } = useCrosswordGame();
 
   const gridRef = useRef(null);
+  const mobileInputRef = useRef(null);
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
-
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -41,13 +41,24 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
   // Auto-focus grid when cell is selected
   useEffect(() => {
     if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-      const cellKey = `${selectedCell.row}-${selectedCell.col}`;
-      const cellRef = cellRefs[cellKey];
-      if (cellRef) {
-        cellRef.focus();
+      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640;
+      
+      if (isMobile) {
+        // On mobile, focus the hidden input to show keyboard when user taps a cell
+        // But only if we're not preventing focus (e.g., during calendar operations)
+        if (!externalPreventMobileFocus && mobileInputRef.current) {
+          mobileInputRef.current.focus();
+        }
+      } else {
+        // Desktop behavior - focus the actual cell
+        const cellKey = `${selectedCell.row}-${selectedCell.col}`;
+        const cellRef = cellRefs[cellKey];
+        if (cellRef) {
+          cellRef.focus();
+        }
       }
     }
-  }, [selectedCell, cellRefs]);
+  }, [selectedCell, cellRefs, externalPreventMobileFocus]);
 
   // Update timer every second
   useEffect(() => {
@@ -208,6 +219,19 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
     >
+      {/* Hidden input for mobile keyboard - positioned off-screen */}
+      <input
+        ref={mobileInputRef}
+        type="text"
+        className="absolute -left-[9999px] opacity-0 pointer-events-none"
+        onKeyDown={(e) => {
+          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
+            handleKeyInput(e.key);
+          }
+        }}
+        onChange={() => {}} // Prevent uncontrolled input warnings
+        value="" // Keep it empty since we handle input through handleKeyInput
+      />
       {/* Display puzzle info */}
       <div className="mb-4">
         <h3 className="text-base sm:text-lg font-bold text-center mb-1 sm:mb-2">{puzzle.title}</h3>
@@ -318,7 +342,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
       </div>
       
       {/* Timer Display with Pause/Play/Reset - Now outside the flex container */}
-      <div className="text-center">
+      <div className="text-center mt-4">
         <div className="inline-flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
           <button
             onClick={() => isPaused ? resumeTimer() : pauseTimer()}
@@ -361,6 +385,16 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, className = '' }) =
               return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             })()} {isPaused && '(Pause)'}
           </span>
+          {/* Reset game button moved here for clearer placement */}
+          <button
+            onClick={() => externalResetGame && externalResetGame()}
+            className="ml-3 p-1 hover:bg-gray-200 rounded transition-colors"
+            title="Reset Game"
+          >
+            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582M20 20v-5h-.581M4.581 9a8 8 0 1114.838 6" />
+            </svg>
+          </button>
         </div>
       </div>
     </motion.div>

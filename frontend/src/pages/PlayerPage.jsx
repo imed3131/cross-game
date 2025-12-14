@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, RefreshCw, Sparkles, BookOpen, Trophy, Timer } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, BookOpen } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { usePuzzles } from '../hooks/usePuzzles';
@@ -292,19 +292,7 @@ const PlayerPage = () => {
                     </div>
                   </motion.div>
                   
-                  {/* Reset button */}
-                  <motion.div
-                    whileHover={{ scale: 1.05, rotate: 180 }}
-                    whileTap={{ scale: 0.95 }}
-                    transition={{ type: "spring", stiffness: 300 }}
-                  >
-                    <Button
-                      className="bg-white/10 backdrop-blur-lg text-white border border-white/20 hover:bg-white/20 p-2 sm:p-2.5 lg:p-3 rounded-xl lg:rounded-2xl shadow-xl"
-                      icon={<RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />}
-                      onClick={resetGame}
-                    >
-                    </Button>
-                  </motion.div>
+                  {/* Reset button removed from header - moved near grid for clarity */}
                 </>
               )}
             </div>
@@ -313,21 +301,41 @@ const PlayerPage = () => {
           {/* Calendar */}
           <AnimatePresence>
             {showCalendar && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                exit={{ opacity: 0, height: 0, scale: 0.95 }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
-                className="mb-12"
-              >
-                <div className="backdrop-blur-lg bg-white/10 rounded-3xl border border-white/20 p-8 shadow-2xl">
-                  <Calendar
-                    puzzleDates={puzzleDates}
-                    selectedDate={selectedDate}
-                    onDateSelect={handleDateSelect}
-                  />
-                </div>
-              </motion.div>
+              <>
+                {/* Backdrop to close calendar and prevent underlying focus (hides mobile keyboard) */}
+                <motion.div
+                  key="calendar-backdrop"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 0.4 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="fixed inset-0 bg-black z-30"
+                  onClick={() => {
+                    setShowCalendar(false);
+                    // Blur any active element to hide mobile keyboard
+                    if (document.activeElement instanceof HTMLElement) {
+                      document.activeElement.blur();
+                    }
+                  }}
+                />
+
+                <motion.div
+                  key="calendar-panel"
+                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                  className="relative z-40 mb-12"
+                >
+                  <div className="mx-auto max-w-3xl backdrop-blur-lg bg-white/10 rounded-3xl border border-white/20 p-6 shadow-2xl">
+                    <Calendar
+                      puzzleDates={puzzleDates}
+                      selectedDate={selectedDate}
+                      onDateSelect={handleDateSelect}
+                    />
+                  </div>
+                </motion.div>
+              </>
             )}
           </AnimatePresence>
 
@@ -398,8 +406,10 @@ const PlayerPage = () => {
                   <div className="backdrop-blur-lg bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-6 lg:p-8 shadow-2xl">
                     <CrosswordGrid
                       puzzle={currentPuzzle}
+                      resetGame={resetGame}
                       onCellSelect={() => {}}
                       onWordSelect={selectWord}
+                      preventMobileFocus={showCalendar}
                     />
                   </div>
                 </motion.div>

@@ -23,17 +23,44 @@ const CluesPanel = ({
       onWordSelect?.(null);
       return;
     }
-    
-    // Créer un objet word plus complet pour la sélection
+
+    // Build a proper word object with start positions and length
+    // Clues are stored as number => text in puzzle; but puzzle should also include clue metadata when available
+    const number = clue.number || clue;
+
+    // Default conservative values
+    let startRow = 0;
+    let startCol = 0;
+    let length = direction === 'horizontal' ? (puzzle.cols || puzzle?.solution?.[0]?.length || 15) : (puzzle.rows || puzzle?.solution?.length || 15);
+
+    // If the puzzle includes structured clues with positions, use them
+    if (puzzle.cluesMeta) {
+      const metaList = puzzle.cluesMeta[direction] || [];
+      const found = metaList.find(c => c.number === number);
+      if (found) {
+        startRow = found.startRow ?? startRow;
+        startCol = found.startCol ?? startCol;
+        length = found.length ?? length;
+      } else {
+        // Fallback: map number to row/col by simple heuristics
+        if (direction === 'horizontal') startRow = number - 1;
+        if (direction === 'vertical') startCol = number - 1;
+      }
+    } else {
+      // Fallback heuristics
+      if (direction === 'horizontal') startRow = number - 1;
+      if (direction === 'vertical') startCol = number - 1;
+    }
+
     const word = {
-      ...clue,
-      direction,
-      // Pour les indices simples par ligne/colonne
-      startRow: direction === 'horizontal' ? (clue.number - 1) : 0,
-      startCol: direction === 'vertical' ? (clue.number - 1) : 0,
-      length: direction === 'horizontal' ? (puzzle?.cols || 15) : (puzzle?.rows || 15)
+      number,
+      clue: clue.clue || clue,
+      startRow,
+      startCol,
+      length,
+      direction
     };
-    
+
     onWordSelect?.(word);
   };
 
