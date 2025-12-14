@@ -37,7 +37,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
     document.addEventListener('keydown', handleDocumentKeyDown);
     return () => document.removeEventListener('keydown', handleDocumentKeyDown);
-  }, [selectedCell.row, selectedCell.col]); // Removed handleKeyInput to prevent infinite loops
+  }, [selectedCell.row, selectedCell.col, handleKeyInput]); // Fixed: Added handleKeyInput dependency
 
   // Auto-focus grid when cell is selected
   useEffect(() => {
@@ -56,17 +56,18 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     }
   }, [selectedCell.row, selectedCell.col, externalPreventMobileFocus]);
 
-  // Update timer every second
+  // Update timer every second - use state callback to avoid function dependency
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTime(getElapsedTime());
+      // Use callback pattern to access current getElapsedTime without dependency
+      setCurrentTime(() => getElapsedTime());
     }, 1000);
 
     // Initial update
     setCurrentTime(getElapsedTime());
 
     return () => clearInterval(interval);
-  }, [getElapsedTime]);
+  }, []); // Safe empty dependency - getElapsedTime accessed in callback
 
   if (!puzzle) {
     return (

@@ -155,7 +155,7 @@ export const useCrosswordGame = () => {
         }
       }
     }
-  }, [state.selectedCell, state.currentPuzzle, state.selectedWord, state.currentGrid]);
+  }, [state.selectedCell, state.currentPuzzle, state.selectedWord, state.currentGrid, updateGridCell, selectCell]);
 
   // Check if puzzle is completed
   useEffect(() => {
