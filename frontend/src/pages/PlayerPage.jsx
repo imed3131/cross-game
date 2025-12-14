@@ -409,7 +409,6 @@ const PlayerPage = () => {
                       resetGame={resetGame}
                       onCellSelect={() => {}}
                       onWordSelect={selectWord}
-                      preventMobileFocus={showCalendar}
                     />
                   </div>
                 </motion.div>

@@ -1,14 +1,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
+import CrosswordCell from './CrosswordCell';
 
-const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: externalResetGame, preventMobileFocus: externalPreventMobileFocus = false, className = '' }) => {
+const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: externalResetGame, className = '' }) => {
   const {
     currentGrid,
     selectedCell,
     selectedWord,
     highlightedCells,
     handleKeyInput,
+    updateGridCell,
     selectCell,
     selectWord,
     invalidInput,
@@ -22,43 +24,11 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   } = useCrosswordGame();
 
   const gridRef = useRef(null);
-  const mobileInputRef = useRef(null);
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
   const [localHighlightedCells, setLocalHighlightedCells] = useState([]);
-  // Handle keyboard events - DESKTOP ONLY (mobile uses hidden input field)
-  useEffect(() => {
-    const handleDocumentKeyDown = (e) => {
-      // Skip if mobile device to prevent duplicate input processing
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-      if (isMobile) return;
-      
-      if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-        handleKeyInput(e.key);
-      }
-    };
 
-    document.addEventListener('keydown', handleDocumentKeyDown);
-    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
-  }, [selectedCell.row, selectedCell.col, handleKeyInput]);
-
-  // Auto-focus grid when cell is selected
-  useEffect(() => {
-    if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-      const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-      
-      if (isMobile && !externalPreventMobileFocus && mobileInputRef.current) {
-        // Simple mobile focus without aggressive re-focusing
-        setTimeout(() => {
-          if (mobileInputRef.current) {
-            mobileInputRef.current.value = ''; // Clear first
-            mobileInputRef.current.focus({ preventScroll: true });
-          }
-        }, 100);
-      }
-    }
-  }, [selectedCell.row, selectedCell.col, externalPreventMobileFocus]);
 
   // Update timer every second - use state callback to avoid function dependency
   useEffect(() => {
@@ -73,9 +43,83 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     return () => clearInterval(interval);
   }, []); // Safe empty dependency - getElapsedTime accessed in callback
 
+  // Handle cell value changes
+  const handleCellChange = useCallback((value, row, col) => {
+    if (!puzzle || !currentGrid) return;
+    updateGridCell(row, col, value);
+  }, [puzzle, currentGrid, updateGridCell]);
+
+  // Handle navigation between cells
+  const handleCellNavigation = useCallback((direction, currentRow, currentCol) => {
+    if (!puzzle) return;
+
+    let newRow = currentRow;
+    let newCol = currentCol;
+
+    switch (direction) {
+      case 'next':
+      case 'right':
+        if (currentCol < (puzzle.cols || currentGrid[0]?.length || 0) - 1) {
+          newCol = currentCol + 1;
+        } else if (currentRow < (puzzle.rows || currentGrid?.length || 0) - 1) {
+          newRow = currentRow + 1;
+          newCol = 0;
+        }
+        break;
+      case 'previous':
+      case 'left':
+        if (currentCol > 0) {
+          newCol = currentCol - 1;
+        } else if (currentRow > 0) {
+          newRow = currentRow - 1;
+          newCol = (puzzle.cols || currentGrid[0]?.length || 0) - 1;
+        }
+        break;
+      case 'up':
+        if (currentRow > 0) {
+          newRow = currentRow - 1;
+        }
+        break;
+      case 'down':
+        if (currentRow < (puzzle.rows || currentGrid?.length || 0) - 1) {
+          newRow = currentRow + 1;
+        }
+        break;
+    }
+
+    // Skip black cells
+    while (newRow >= 0 && newRow < (puzzle.rows || currentGrid?.length || 0) &&
+           newCol >= 0 && newCol < (puzzle.cols || currentGrid[0]?.length || 0) &&
+           (puzzle.solution?.[newRow]?.[newCol] === '' || puzzle.solution?.[newRow]?.[newCol] === '#')) {
+      
+      if (direction === 'next' || direction === 'right') {
+        if (newCol < (puzzle.cols || currentGrid[0]?.length || 0) - 1) {
+          newCol++;
+        } else if (newRow < (puzzle.rows || currentGrid?.length || 0) - 1) {
+          newRow++;
+          newCol = 0;
+        } else {
+          break;
+        }
+      } else if (direction === 'previous' || direction === 'left') {
+        if (newCol > 0) {
+          newCol--;
+        } else if (newRow > 0) {
+          newRow--;
+          newCol = (puzzle.cols || currentGrid[0]?.length || 0) - 1;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+
+    selectCell(newRow, newCol);
+  }, [puzzle, currentGrid, selectCell]);
+
   const handleCellClick = (row, col) => {
-    if (!puzzle || !currentGrid) return; // Guard clause instead of early return
-    const cell = currentGrid[row][col];
+    if (!puzzle || !currentGrid) return;
     
     // Don't select black cells
     if (puzzle.solution[row][col] === '') return;
@@ -256,62 +300,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
     >
-      {/* 
-        Hidden input for mobile keyboard - positioned off-screen
-        
-        INPUT HANDLING STRATEGY:
-        - MOBILE: Uses this hidden input field with onInput event only
-        - DESKTOP: Uses global document keydown listener only  
-        - This prevents duplicate processing of the same keystroke
-        - Mobile keyboards can fire multiple events (keydown + input) for one keystroke
-        - By separating mobile/desktop handling, each character is processed exactly once
-      */}
-      <input
-        ref={mobileInputRef}
-        type="text"
-        className="absolute -left-[9999px] opacity-0 pointer-events-none"
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        spellCheck="false"
-        inputMode="text"
-        onInput={(e) => {
-          // MOBILE INPUT ONLY - Desktop uses global keyboard listener
-          e.preventDefault();
-          e.stopPropagation();
-          
-          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-            const value = e.target.value;
-            if (value) {
-              const char = value.charAt(0); // Take only first character
-              if (char && char.match(/[a-zA-ZÀ-ÿ]/)) {
-                handleKeyInput(char);
-              }
-            }
-          }
-          
-          // Always clear input immediately
-          e.target.value = '';
-        }}
-        onKeyDown={(e) => {
-          // Prevent mobile keyboard events from bubbling to document listener
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onFocus={() => {
-          // Clear on focus to prevent old values
-          if (mobileInputRef.current) {
-            mobileInputRef.current.value = '';
-          }
-        }}
-        onBlur={() => {
-          // Clear on blur as well
-          if (mobileInputRef.current) {
-            mobileInputRef.current.value = '';
-          }
-        }}
-        value="" // Always keep empty
-      />
+
       {/* Display puzzle info */}
       <div className="mb-4">
         <h3 className="text-base sm:text-lg font-bold text-center mb-1 sm:mb-2">{puzzle.title}</h3>
@@ -341,80 +330,25 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                 const cellKey = `${rowIndex}-${colIndex}`;
 
                 return (
-                  <motion.div
+                  <CrosswordCell
                     key={cellKey}
-                    ref={(el) => {
-                      if (el) {
-                        setCellRefs(prev => ({ ...prev, [cellKey]: el }));
-                      }
-                    }}
-                    className={`
-                      relative w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 lg:w-14 lg:h-14 border-2 cursor-pointer font-bold text-sm sm:text-base md:text-lg lg:text-xl
-                      flex items-center justify-center transition-all duration-200 rounded-sm sm:rounded-md
-                      ${isBlackCell 
-                        ? 'bg-black border-black' 
-                        : `bg-white border-gray-400 hover:border-primary-400 shadow-sm
-                           ${isSelected ? 'border-primary-600 bg-primary-50 shadow-md' : ''}
-                           ${isHighlighted ? 'bg-yellow-50 border-yellow-300' : ''}
-                           ${isHovered ? 'bg-gray-100' : ''}
-                           ${invalidInput ? 'animate-shake border-red-500' : ''}`
-                      }
-                    `}
-                    onClick={() => handleCellClick(rowIndex, colIndex)}
-                    onMouseEnter={() => handleCellMouseEnter(rowIndex, colIndex)}
+                    value={cell || ''}
+                    onChange={handleCellChange}
+                    onNavigate={handleCellNavigation}
+                    isSelected={isSelected}
+                    isHighlighted={isHighlighted}
+                    isHovered={isHovered}
+                    isBlackCell={isBlackCell}
+                    cellNumber={cellNumber}
+                    row={rowIndex}
+                    col={colIndex}
+                    onClick={handleCellClick}
+                    onMouseEnter={handleCellMouseEnter}
                     onMouseLeave={handleCellMouseLeave}
-                    whileHover={{ scale: isBlackCell ? 1 : 1.05 }}
-                    whileTap={{ scale: isBlackCell ? 1 : 0.95 }}
-                  >
-                    {/* Cell number */}
-                    {cellNumber && (
-                      <span className="absolute top-0 left-0 text-xs font-bold text-primary-600 leading-none p-0.5">
-                        {cellNumber}
-                      </span>
-                    )}
-                    
-                    {/* Cell content */}
-                    {!isBlackCell && (
-                      <AnimatePresence mode="wait">
-                        {cell && (
-                          <motion.span
-                            key={cell}
-                            initial={{ scale: 0, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            exit={{ scale: 0, opacity: 0 }}
-                            transition={{ type: 'spring', duration: 0.2 }}
-                            className={`text-center font-bold ${language === 'AR' ? 'font-arabic' : ''}`}
-                            style={{
-                              direction: language === 'AR' ? 'rtl' : 'ltr',
-                              unicodeBidi: 'plaintext'
-                            }}
-                          >
-                            {cell}
-                          </motion.span>
-                        )}
-                      </AnimatePresence>
-                    )}
-                    
-                    {/* Selection indicator */}
-                    {isSelected && (
-                      <motion.div
-                        className="absolute inset-0 bg-primary-200 opacity-20 rounded"
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: 'spring', duration: 0.2 }}
-                      />
-                    )}
-                    
-                    {/* Word highlight */}
-                    {isHighlighted && !isSelected && (
-                      <motion.div
-                        className="absolute inset-0 bg-yellow-100 opacity-40 rounded"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.4 }}
-                        transition={{ duration: 0.2 }}
-                      />
-                    )}
-                  </motion.div>
+                    className={`
+                      ${invalidInput ? 'animate-shake' : ''}
+                    `}
+                  />
                 );
               });
             })}
