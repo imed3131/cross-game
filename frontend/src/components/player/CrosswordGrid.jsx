@@ -149,7 +149,12 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   };
 
   const isCellHighlighted = (row, col) => {
-    return highlightedCells && Array.isArray(highlightedCells) && highlightedCells.some(cell => cell && cell.row === row && cell.col === col);
+    const isHighlighted = highlightedCells && Array.isArray(highlightedCells) && highlightedCells.some(cell => cell && cell.row === row && cell.col === col);
+    // Only log for the first few cells to avoid spam
+    if (row === 0 && col === 0 && highlightedCells && highlightedCells.length > 0) {
+      console.log('🔍 CrosswordGrid: highlightedCells:', highlightedCells);
+    }
+    return isHighlighted;
   };
 
   const isCellSelected = (row, col) => {

@@ -82,6 +82,7 @@ export const useCrosswordGame = () => {
     }
 
     const positions = getWordPositions(word, state.currentGrid);
+    console.log('🔍 useCrosswordGame: selectWord called with:', { word, positions, gridSize: state.currentGrid?.length });
     
     dispatch({
       type: GAME_ACTIONS.SELECT_WORD,
