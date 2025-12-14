@@ -67,7 +67,18 @@ export const adminAPI = {
 // Player API
 export const playerAPI = {
   getTodaysPuzzles: () => api.get('/player/today'),
-  getPuzzlesByDate: (date) => api.get(`/player/date/${date}`),
+  getPuzzlesByDate: (date) => {
+    // Format date to YYYY-MM-DD to avoid timezone issues
+    const formatDate = (date) => {
+      if (typeof date === 'string') return date;
+      const d = new Date(date);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+    return api.get(`/player/date/${formatDate(date)}`);
+  },
   getAllPuzzleDates: () => api.get('/player/dates'),
   submitSolution: (id, solutionData) => api.post(`/player/submit/${id}`, solutionData),
 };

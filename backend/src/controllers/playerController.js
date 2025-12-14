@@ -5,17 +5,25 @@ const prisma = new PrismaClient();
 const getTodaysPuzzles = async (req, res) => {
   try {
     console.log('=== GET TODAYS PUZZLES ===');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    console.log('Date range:', today, 'to', tomorrow);
+    
+    // Get current local date and create UTC date range for that day
+    const now = new Date();
+    const localYear = now.getFullYear();
+    const localMonth = now.getMonth();
+    const localDay = now.getDate();
+    
+    // Create date range in UTC for the current local day
+    const startOfDay = new Date(Date.UTC(localYear, localMonth, localDay, 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(localYear, localMonth, localDay + 1, 0, 0, 0, 0));
+    
+    console.log('Current local date:', now.toLocaleDateString());
+    console.log('Searching for puzzles between:', startOfDay.toISOString(), 'and', endOfDay.toISOString());
     
     const puzzles = await prisma.crosswordPuzzle.findMany({
       where: {
         date: {
-          gte: today,
-          lt: tomorrow,
+          gte: startOfDay,
+          lt: endOfDay,
         },
         isPublished: true,
       },
@@ -76,16 +84,34 @@ const getTodaysPuzzles = async (req, res) => {
 const getPuzzlesByDate = async (req, res) => {
   try {
     const { date } = req.params;
-    const targetDate = new Date(date);
-    targetDate.setHours(0, 0, 0, 0);
-    const nextDate = new Date(targetDate);
-    nextDate.setDate(nextDate.getDate() + 1);
+    console.log('=== GET PUZZLES BY DATE ===');
+    console.log('Received date parameter:', date);
+    
+    // Parse date and create UTC range for that specific day
+    let year, month, day;
+    if (date.includes('-')) {
+      // If date is in YYYY-MM-DD format
+      [year, month, day] = date.split('-').map(num => parseInt(num));
+    } else {
+      const parsed = new Date(date);
+      year = parsed.getFullYear();
+      month = parsed.getMonth() + 1; // getMonth() returns 0-indexed
+      day = parsed.getDate();
+    }
+    
+    // Create UTC date range for the specified day
+    const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+    const endOfDay = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
+    
+    console.log('Requested date:', date);
+    console.log('Parsed as:', year + '-' + month + '-' + day);
+    console.log('Searching for puzzles between:', startOfDay.toISOString(), 'and', endOfDay.toISOString());
     
     const puzzles = await prisma.crosswordPuzzle.findMany({
       where: {
         date: {
-          gte: targetDate,
-          lt: nextDate,
+          gte: startOfDay,
+          lt: endOfDay,
         },
         isPublished: true,
       },
