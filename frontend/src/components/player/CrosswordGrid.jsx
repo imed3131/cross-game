@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
 
@@ -23,21 +23,23 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
   const gridRef = useRef(null);
   const mobileInputRef = useRef(null);
+  const processingInputRef = useRef(false);
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
   const [localHighlightedCells, setLocalHighlightedCells] = useState([]);
+  // Stable keyboard handler
+  const handleDocumentKeyDown = useCallback((e) => {
+    if (selectedCell.row !== -1 && selectedCell.col !== -1) {
+      handleKeyInput(e.key);
+    }
+  }, [selectedCell.row, selectedCell.col, handleKeyInput]);
+
   // Handle keyboard events
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-        handleKeyInput(e.key);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedCell, handleKeyInput]);
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
+  }, [handleDocumentKeyDown]);
 
   // Auto-focus grid when cell is selected
   useEffect(() => {
@@ -92,7 +94,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         }
       }
     }
-  }, [selectedCell, cellRefs, externalPreventMobileFocus]);
+  }, [selectedCell.row, selectedCell.col, externalPreventMobileFocus]);
 
   // Update timer every second
   useEffect(() => {
@@ -202,8 +204,9 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
     const positions = [];
     const { direction, number } = selectedWord;
-    const gridRows = puzzle.rows || currentGrid?.length || 10;
-    const gridCols = puzzle.cols || currentGrid?.[0]?.length || 10;
+    // Use stable puzzle dimensions instead of currentGrid
+    const gridRows = puzzle.rows || 10;
+    const gridCols = puzzle.cols || 10;
 
     if (direction === 'horizontal') {
       // Highlight entire row
@@ -224,7 +227,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     }
 
     setLocalHighlightedCells(positions);
-  }, [selectedWord, puzzle, currentGrid]);
+  }, [selectedWord, puzzle?.rows, puzzle?.cols]);
 
   const isCellHighlighted = (row, col) => {
     return localHighlightedCells && localHighlightedCells.some(cell => cell && cell.row === row && cell.col === col);
@@ -324,15 +327,37 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
           if (mobileInputRef.current) {
             mobileInputRef.current.value = '';
           }
+          // Reset processing flag on focus
+          processingInputRef.current = false;
         }}
         onKeyDown={(e) => {
+          // Prevent duplicate processing
+          if (processingInputRef.current) {
+            return;
+          }
+          
+          processingInputRef.current = true;
           e.preventDefault();
+          
           if (selectedCell.row !== -1 && selectedCell.col !== -1) {
             handleKeyInput(e.key);
           }
+          
+          setTimeout(() => {
+            processingInputRef.current = false;
+          }, 50);
         }}
         onInput={(e) => {
-          // Handle input event for better mobile support
+          // Prevent duplicate processing
+          if (processingInputRef.current) {
+            e.target.value = '';
+            return;
+          }
+          
+          processingInputRef.current = true;
+          e.preventDefault();
+          e.stopPropagation();
+          
           if (selectedCell.row !== -1 && selectedCell.col !== -1) {
             const value = e.target.value;
             if (value && value.trim()) {
@@ -343,48 +368,12 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
               }
             }
           }
-          // Always clear the input to prevent accumulation
+          
+          // Clear input and reset processing flag
+          e.target.value = '';
           setTimeout(() => {
-            if (e.target) e.target.value = '';
-          }, 0);
-        }}
-        onChange={(e) => {
-          // Additional fallback for different mobile keyboards
-          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-            const value = e.target.value;
-            if (value && value.trim()) {
-              const lastChar = value.slice(-1).trim();
-              if (lastChar && lastChar.match(/[a-zA-ZÀ-ÿ]/)) {
-                handleKeyInput(lastChar);
-              }
-            }
-          }
-          // Clear input
-          if (e.target) e.target.value = '';
-        }}
-        onCompositionEnd={(e) => {
-          // Handle complex input methods (predictive text, autocorrect, etc.)
-          if (selectedCell.row !== -1 && selectedCell.col !== -1) {
-            const value = e.target.value || e.data || '';
-            if (value && value.trim()) {
-              const lastChar = value.slice(-1).trim();
-              if (lastChar && lastChar.match(/[a-zA-ZÀ-ÿ]/)) {
-                handleKeyInput(lastChar);
-              }
-            }
-          }
-          // Clear input
-          if (e.target) e.target.value = '';
-        }}
-        onBeforeInput={(e) => {
-          // Handle input before it's processed (modern browsers)
-          if (selectedCell.row !== -1 && selectedCell.col !== -1 && e.data) {
-            const char = e.data.trim();
-            if (char && char.match(/[a-zA-ZÀ-ÿ]/)) {
-              e.preventDefault();
-              handleKeyInput(char);
-            }
-          }
+            processingInputRef.current = false;
+          }, 50);
         }}
         value="" // Keep it empty since we handle input through multiple events
       />
