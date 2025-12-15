@@ -85,17 +85,26 @@ export const getWordPositions = (clue, grid) => {
 
 export const getIntersectingWords = (row, col, cluesHorizontal, cluesVertical) => {
   const intersecting = [];
-  
+  // Normalize inputs: accept arrays or objects (maps)
+  const hClues = Array.isArray(cluesHorizontal) ? cluesHorizontal : (cluesHorizontal ? Object.values(cluesHorizontal) : []);
+  const vClues = Array.isArray(cluesVertical) ? cluesVertical : (cluesVertical ? Object.values(cluesVertical) : []);
+
   // Check horizontal clues
-  cluesHorizontal.forEach(clue => {
-    if (row === clue.startRow && col >= clue.startCol && col < clue.startCol + clue.length) {
+  hClues.forEach(clue => {
+    if (!clue || typeof clue !== 'object') return;
+    const { startRow, startCol, length } = clue;
+    if (typeof startRow !== 'number' || typeof startCol !== 'number' || typeof length !== 'number') return;
+    if (row === startRow && col >= startCol && col < startCol + length) {
       intersecting.push({ ...clue, direction: 'horizontal' });
     }
   });
-  
+
   // Check vertical clues
-  cluesVertical.forEach(clue => {
-    if (col === clue.startCol && row >= clue.startRow && row < clue.startRow + clue.length) {
+  vClues.forEach(clue => {
+    if (!clue || typeof clue !== 'object') return;
+    const { startRow, startCol, length } = clue;
+    if (typeof startRow !== 'number' || typeof startCol !== 'number' || typeof length !== 'number') return;
+    if (col === startCol && row >= startRow && row < startRow + length) {
       intersecting.push({ ...clue, direction: 'vertical' });
     }
   });

@@ -43,23 +43,53 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const check = () => {
-      const ov = el.scrollWidth > el.clientWidth;
-      setIsOverflowing(ov);
-      if (ov) el.scrollLeft = 0; // ensure left edge visible
+    const prevOverflowRef = { current: isOverflowing };
+    let raf = null;
+    let scrollTimer = null;
+    let userScrolled = false;
+
+    const onUserScroll = () => {
+      userScrolled = true;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => { userScrolled = false; }, 400);
     };
+
+    const check = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const ov = el.scrollWidth > el.clientWidth;
+        if (ov !== prevOverflowRef.current) {
+          prevOverflowRef.current = ov;
+          setIsOverflowing(ov);
+          // Only force scroll to left when overflow first appears and user is not actively scrolling
+          if (ov && !userScrolled) {
+            try { el.scrollLeft = 0; } catch (e) { /* ignore */ }
+          }
+        }
+      });
+    };
+
     check();
+    el.addEventListener('scroll', onUserScroll, { passive: true });
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(check);
       ro.observe(el);
-      window.addEventListener('orientationchange', check);
+      window.addEventListener('orientationchange', check, { passive: true });
       return () => {
         ro.disconnect();
+        el.removeEventListener('scroll', onUserScroll);
         window.removeEventListener('orientationchange', check);
+        if (raf) cancelAnimationFrame(raf);
+        if (scrollTimer) clearTimeout(scrollTimer);
       };
     }
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
+    window.addEventListener('resize', check, { passive: true });
+    return () => {
+      window.removeEventListener('resize', check);
+      el.removeEventListener('scroll', onUserScroll);
+      if (raf) cancelAnimationFrame(raf);
+      if (scrollTimer) clearTimeout(scrollTimer);
+    };
   }, [puzzle, currentGrid]);
   // Update timer immediately after reset
   const handleResetTimer = () => {
