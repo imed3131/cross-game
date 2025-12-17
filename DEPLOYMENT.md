@@ -1,30 +1,17 @@
 # 🚀 Deployment Guide for Les Mots Croisés
 
 This guide will help you deploy your crossword game using:
-- **Neon** for PostgreSQL database
+- **Render PostgreSQL** for database (automatically provided by Render)
 - **Render** for backend hosting
 - **Vercel** for frontend hosting
 
 ## Prerequisites
 
 1. GitHub account with your code pushed to a repository
-2. Neon account (https://neon.tech)
-3. Render account (https://render.com)
-4. Vercel account (https://vercel.com)
+2. Render account (https://render.com)
+3. Vercel account (https://vercel.com)
 
-## Step 1: Setup Neon Database
-
-1. **Create Neon Account & Project**
-   - Go to https://neon.tech
-   - Sign up/Login and create a new project
-   - Choose a region close to your users
-   - Note down the connection string
-
-2. **Configure Database**
-   - Copy the connection string (starts with `postgresql://`)
-   - It should look like: `postgresql://username:password@host.neon.tech/dbname?sslmode=require`
-
-## Step 2: Deploy Backend to Render
+## Step 1: Deploy Backend to Render
 
 1. **Connect GitHub Repository**
    - Go to https://render.com
@@ -41,12 +28,19 @@ This guide will help you deploy your crossword game using:
 
 3. **Set Environment Variables**
    ```
-   DATABASE_URL=your-neon-connection-string
    JWT_SECRET=your-super-secure-jwt-secret-here
-   ADMIN_CODE=your-admin-secret-code
+   ADMIN_SECRET_CODE=your-admin-secret-code
    NODE_ENV=production
    CORS_ORIGINS=https://your-frontend.vercel.app
    ```
+   **Note**: DATABASE_URL will be automatically set by Render when you add a PostgreSQL database.
+
+4. **Add PostgreSQL Database**
+   - In Render dashboard, click "New +" → "PostgreSQL"
+   - Choose a name like `les-mots-croises-db`
+   - Select region and instance type
+   - Once created, copy the `DATABASE_URL` from the database settings
+   - Add it to your web service environment variables
 
 4. **Deploy**
    - Click "Create Web Service"

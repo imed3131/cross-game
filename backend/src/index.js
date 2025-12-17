@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { execSync } = require('child_process');
 require('dotenv').config();
 
 // Import routes
@@ -11,6 +12,18 @@ const playerRoutes = require('./routes/player');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Initialize database in production
+if (process.env.NODE_ENV === 'production') {
+  try {
+    console.log('Setting up database...');
+    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' });
+    console.log('Database setup complete');
+  } catch (error) {
+    console.error('Database setup failed:', error.message);
+    // Don't exit - let the app start anyway
+  }
+}
 
 // Trust proxy for Render deployment
 app.set('trust proxy', 1);
