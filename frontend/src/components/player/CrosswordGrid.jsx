@@ -29,6 +29,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [currentTime, setCurrentTime] = useState(0);
+  const [floatingClue, setFloatingClue] = useState({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '' });
   // Update timer every second - use state callback to avoid function dependency
 
   useEffect(() => {
@@ -223,8 +224,13 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     }
     
     if (intersecting.length > 0) {
-      // If same cell is clicked again, cycle through intersecting words
-      if (selectedCell.row === row && selectedCell.col === col && intersecting.length > 1) {
+      // If the same numbered word is already selected, toggle it off
+      const firstWord = { ...intersecting[0], direction: intersecting[0].direction || (intersecting[0].startRow === row ? 'horizontal' : 'vertical') };
+      if (selectedWord && selectedWord.number === firstWord.number && (selectedWord.direction === firstWord.direction || intersecting.length === 1)) {
+        selectWord(null);
+        onWordSelect?.(null);
+      } else if (selectedCell.row === row && selectedCell.col === col && intersecting.length > 1) {
+        // If same cell clicked and multiple intersecting words, cycle to next
         const currentWordIndex = intersecting.findIndex(word => 
           selectedWord && 
           word.number === selectedWord.number && 
@@ -235,9 +241,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         selectWord(nextWord);
         onWordSelect?.(nextWord);
       } else {
-        const word = { ...intersecting[0], direction: intersecting[0].direction || (intersecting[0].startRow === row ? 'horizontal' : 'vertical') };
-        selectWord(word);
-        onWordSelect?.(word);
+        selectWord(firstWord);
+        onWordSelect?.(firstWord);
       }
     }
   };
@@ -324,12 +329,19 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   return (
     <motion.div
       ref={gridRef}
-      className={`p-2 sm:p-3 lg:p-4 bg-white rounded-xl lg:rounded-2xl shadow-lg ${className}`}
+      className={`relative p-2 sm:p-3 lg:p-4 bg-white rounded-xl lg:rounded-2xl shadow-lg ${className}`}
       style={{ direction: 'ltr' }}
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
     >
+
+      {/* Floating clue */}
+      {floatingClue.show && (
+        <div className="absolute bg-blue-50 text-sm text-gray-800 px-4 py-2 rounded-lg shadow-xl z-[1000] whitespace-normal max-w-xs border border-blue-200 font-medium" style={{ top: floatingClue.top, left: floatingClue.left, transform: floatingClue.transform }}>
+          {floatingClue.clue}
+        </div>
+      )}
 
       {/* Display puzzle info */}
       <div className="mb-4">
@@ -340,58 +352,142 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         </div>
       </div>
 
-      {/* Grid without numbered rows and columns */}
+      {/* Grid with separate top column headers and left row headers (Option A) */}
       <div className="flex justify-center mb-4">
-        {/* When grid exceeds available width, allow horizontal scrolling */}
-  <div ref={scrollRef} className={`w-full overflow-x-auto flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
+        <div ref={scrollRef} className={`w-full overflow-x-auto overflow-y-visible flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
           <div className="w-auto">
-            <div 
-              className="grid gap-0.5 sm:gap-1 player-grid-force-ltr"
-              dir="ltr"
-              style={{ 
-                direction: 'ltr',
-                width: 'max-content',
-                gridTemplateColumns: `repeat(${puzzle.cols || gridSize}, minmax(0, 1fr))`
-              }}
-            >
-            {currentGrid?.map((row, rowIndex) => {
-              if (!Array.isArray(row)) return null;
-              return row.map((cell, colIndex) => {
-                const isBlackCell = puzzle.solution?.[rowIndex]?.[colIndex] === '' || puzzle.solution?.[rowIndex]?.[colIndex] === '#';
-                const isSelected = isCellSelected(rowIndex, colIndex);
-                const isHovered = isCellHovered(rowIndex, colIndex);
-                const cellNumber = getCellNumber(rowIndex, colIndex);
-                const cellKey = `${rowIndex}-${colIndex}`;
+            <div className="player-grid-force-ltr" dir="ltr" style={{ direction: 'ltr', width: 'max-content' }}>
+              {/* Top header row */}
+              <div className="flex items-center">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" />
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${puzzle.cols || gridSize}, minmax(0, 1fr))`, gap: '0.125rem' }}>
+                  {Array.from({ length: puzzle.cols || gridSize }).map((_, colIndex) => {
+                    const colNumber = colIndex + 1;
+                    const hasClue = puzzle.cluesVertical && puzzle.cluesVertical[colNumber];
+                    return (
+                      <div key={`col-head-${colIndex}`} className="relative">
+                        <button
+                          onClick={(e) => {
+                            if (!hasClue) return;
+                            const word = { number: colNumber, startRow: 0, startCol: colIndex, length: puzzle.rows || currentGrid?.length || 0, direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
+                            if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'vertical') {
+                              selectWord(null);
+                              onWordSelect?.(null);
+                              setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '' });
+                            } else {
+                              selectWord(word);
+                              onWordSelect?.(word);
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const gridRect = gridRef.current.getBoundingClientRect();
+                              setFloatingClue({ show: true, clue: word.clue, type: 'col', index: colIndex, top: rect.top - gridRect.top - 40, left: rect.left - gridRect.left + rect.width / 2, transform: 'translateX(-50%)' });
+                            }
+                          }}
+                          className={`flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${hasClue ? `cursor-pointer ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? '' : 'hover:bg-white/30'}` : 'opacity-30 cursor-not-allowed'} ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'bg-blue-500 text-white' : ''}`}
+                        >{colNumber}</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-                return (
-                  <CrosswordCell
-                    key={cellKey}
-                    value={cell || ''}
-                    onChange={handleCellChange}
-                    onNavigate={handleCellNavigation}
-                    isSelected={isSelected}
-                    isHovered={isHovered}
-                    isBlackCell={isBlackCell}
-                    language={language}
-                    cellNumber={cellNumber}
-                    row={rowIndex}
-                    col={colIndex}
-                    onClick={handleCellClick}
-                    onMouseEnter={handleCellMouseEnter}
-                    onMouseLeave={handleCellMouseLeave}
-                    className={`
-                      ${invalidInput ? 'animate-shake' : ''}
-                    `}
-                  />
-                );
-              });
-            })}
+              {/* Body row: row headers + cells */}
+              <div style={{ display: 'flex' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
+                    {currentGrid?.map((row, rowIndex) => {
+                    if (!Array.isArray(row)) return <div key={`row-head-empty-${rowIndex}`} className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" />;
+                    const rowNumber = rowIndex + 1;
+                    const hasRowClue = puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber];
+                    return (
+                      <div key={`row-head-${rowIndex}`} className="relative">
+                        <button
+                          onClick={(e) => {
+                            if (!hasRowClue) return;
+                            const word = { number: rowNumber, startRow: rowIndex, startCol: 0, length: puzzle.cols || row.length || 0, direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
+                            if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'horizontal') {
+                              selectWord(null);
+                              onWordSelect?.(null);
+                              setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '' });
+                            } else {
+                              selectWord(word);
+                              onWordSelect?.(word);
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const gridRect = gridRef.current.getBoundingClientRect();
+                              setFloatingClue({ show: true, clue: word.clue, type: 'row', index: rowIndex, top: rect.top - gridRect.top - 40, left: rect.left - gridRect.left + rect.width / 2, transform: 'translateX(-50%)' });
+                            }
+                          }}
+                          className={`flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 ${hasRowClue ? `cursor-pointer ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? '' : 'hover:bg-white/30'}` : 'opacity-30'} ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'bg-blue-500 text-white' : ''}`}
+                        >{hasRowClue ? rowNumber : ''}</button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${puzzle.cols || gridSize}, minmax(0, 1fr))`, gap: '0.125rem' }}>
+                  {currentGrid?.map((row, rowIndex) => {
+                    if (!Array.isArray(row)) return null;
+                    return row.map((cell, colIndex) => {
+                      const isBlackCell = puzzle.solution?.[rowIndex]?.[colIndex] === '' || puzzle.solution?.[rowIndex]?.[colIndex] === '#';
+                      const isSelected = isCellSelected(rowIndex, colIndex);
+                      const isHovered = isCellHovered(rowIndex, colIndex);
+                      const cellNumber = getCellNumber(rowIndex, colIndex);
+                      const cellKey = `${rowIndex}-${colIndex}`;
+                      return (
+                        <CrosswordCell
+                          key={cellKey}
+                          value={cell || ''}
+                          onChange={handleCellChange}
+                          onNavigate={handleCellNavigation}
+                          isSelected={isSelected}
+                          isHovered={isHovered}
+                          isBlackCell={isBlackCell}
+                          language={language}
+                          cellNumber={null}
+                          selectedWord={selectedWord}
+                          row={rowIndex}
+                          col={colIndex}
+                          onClick={handleCellClick}
+                          onNumberClick={(r, c) => {
+                            // Determine if this number corresponds to a row or column clue
+                            const rowNumber = r + 1;
+                            const colNumber = c + 1;
+                            const hasRowClue = puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber];
+                            const hasColClue = puzzle.cluesVertical && puzzle.cluesVertical[colNumber];
+
+                            // Prefer row clue if this cell is in the first column header position, otherwise column clue
+                            if (hasRowClue && (!hasColClue || c === 0)) {
+                              const word = { number: rowNumber, startRow: r, startCol: 0, length: puzzle.cols || (currentGrid?.[r]?.length || 0), direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
+                              if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'horizontal') {
+                                selectWord(null);
+                                onWordSelect?.(null);
+                              } else {
+                                selectWord(word);
+                                onWordSelect?.(word);
+                              }
+                            } else if (hasColClue) {
+                              const word = { number: colNumber, startRow: 0, startCol: c, length: puzzle.rows || (currentGrid?.length || 0), direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
+                              if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'vertical') {
+                                selectWord(null);
+                                onWordSelect?.(null);
+                              } else {
+                                selectWord(word);
+                                onWordSelect?.(word);
+                              }
+                            }
+                          }}
+                          onMouseEnter={handleCellMouseEnter}
+                          onMouseLeave={handleCellMouseLeave}
+                          className={`${invalidInput ? 'animate-shake' : ''}`}
+                        />
+                      );
+                    });
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-
-      {/* Timer Display - separated from game controls */}
+            {/* Timer Display - separated from game controls */}
       <div className="text-center mt-4 space-y-3">
         <div className="inline-flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
           <button

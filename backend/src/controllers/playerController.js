@@ -12,7 +12,7 @@ const getTodaysPuzzles = async (req, res) => {
     const localMonth = now.getMonth();
     const localDay = now.getDate();
     
-    // Create date range in UTC for the current local day
+    // Create UTC date range for the current local day
     const startOfDay = new Date(Date.UTC(localYear, localMonth, localDay, 0, 0, 0, 0));
     const endOfDay = new Date(Date.UTC(localYear, localMonth, localDay + 1, 0, 0, 0, 0));
     
@@ -155,6 +155,41 @@ const getPuzzlesByDate = async (req, res) => {
   }
 };
 
+const getAllPuzzles = async (req, res) => {
+  try {
+    const puzzles = await prisma.crosswordPuzzle.findMany({
+      where: { isPublished: true },
+      orderBy: { date: 'desc' },
+    });
+
+    const parsedPuzzles = puzzles.map(puzzle => {
+      const originalGrid = JSON.parse(puzzle.grid);
+      const playerGrid = originalGrid.map(row => row.map(cell => cell === '#' ? '#' : ''));
+      const solutionGrid = originalGrid;
+      return {
+        id: puzzle.id,
+        title: puzzle.title,
+        date: puzzle.date,
+        language: puzzle.language,
+        difficulty: puzzle.difficulty,
+        rows: puzzle.rows,
+        cols: puzzle.cols,
+        grid: playerGrid,
+        solution: solutionGrid,
+        cluesHorizontal: JSON.parse(puzzle.cluesHorizontal),
+        cluesVertical: JSON.parse(puzzle.cluesVertical),
+        numbering: puzzle.numbering ? JSON.parse(puzzle.numbering) : {},
+        createdAt: puzzle.createdAt,
+      };
+    });
+
+    res.json(parsedPuzzles);
+  } catch (error) {
+    console.error('Get all puzzles error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 const submitSolution = async (req, res) => {
   try {
     const { id } = req.params;
@@ -242,6 +277,7 @@ const getAllPuzzleDates = async (req, res) => {
 module.exports = {
   getTodaysPuzzles,
   getPuzzlesByDate,
+  getAllPuzzles,
   submitSolution,
   getAllPuzzleDates,
 };

@@ -1,23 +1,22 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Sparkles, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles, BookOpen } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 import { usePuzzles } from '../hooks/usePuzzles';
 import { useCrosswordGame } from '../hooks/useCrosswordGame';
 
 import CrosswordGrid from '../components/player/CrosswordGrid';
-import CluesPanel from '../components/player/CluesPanel';
-import Calendar from '../components/player/Calendar';
+import PuzzleList from '../components/player/PuzzleList';
 import CompletionCelebration from '../components/player/CompletionCelebration';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Button from '../components/common/Button';
 
 const PlayerPage = () => {
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [currentPuzzleIndex, setCurrentPuzzleIndex] = useState(0);
+  const [showArchive, setShowArchive] = useState(true);
+  const [openedFromArchive, setOpenedFromArchive] = useState(false);
 
   const {
     todaysPuzzles,
@@ -25,7 +24,8 @@ const PlayerPage = () => {
     setSelectedPuzzle,
     puzzleDates,
     loading,
-    fetchPuzzlesByDate,
+  fetchPuzzlesByDate,
+  fetchAllPuzzles,
     submitSolution,
   } = usePuzzles();
 
@@ -74,12 +74,7 @@ const PlayerPage = () => {
     }
   }, [isCompleted, showCelebration, selectedPuzzle?.id]); // Removed function dependencies causing infinite loops
 
-  // Handle date selection
-  const handleDateSelect = useCallback((date) => {
-    setSelectedDate(date);
-    setShowCalendar(false);
-    fetchPuzzlesByDate(date);
-  }, [fetchPuzzlesByDate]);
+  // (Calendar/archive removed) - fetch by date can be triggered directly via hook if needed
 
   // Handle puzzle navigation
   const navigatePuzzle = useCallback((direction) => {
@@ -91,6 +86,8 @@ const PlayerPage = () => {
     
     setCurrentPuzzleIndex(newIndex);
     setSelectedPuzzle(todaysPuzzles[newIndex]);
+  // If user navigates away, clear opened-from-archive mode
+  setOpenedFromArchive(false);
   }, [currentPuzzleIndex, todaysPuzzles, setSelectedPuzzle]);
 
   // Handle play again
@@ -109,6 +106,7 @@ const PlayerPage = () => {
     language === 'FR' ? 'Français' : 'العربية', 
     [language]
   );
+  const effectiveHasMultiplePuzzles = useMemo(() => openedFromArchive ? false : hasMultiplePuzzles, [openedFromArchive, hasMultiplePuzzles]);
 
   if (loading) {
     return (
@@ -253,27 +251,12 @@ const PlayerPage = () => {
             transition={{ delay: 1.2 }}
             className="flex flex-col sm:flex-row flex-wrap items-center justify-between mb-6 sm:mb-8 lg:mb-12 gap-3 sm:gap-4 lg:gap-6"
           >
-            {/* Left Controls */}
-            <div className="flex items-center justify-center sm:justify-start w-full sm:w-auto">
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="backdrop-blur-lg bg-white/10 rounded-xl lg:rounded-2xl border border-white/20 shadow-xl"
-              >
-                <Button
-                  className="bg-transparent text-white border-none hover:bg-white/20 px-3 py-2 sm:px-4 sm:py-2.5 lg:px-6 lg:py-3 text-sm sm:text-base"
-                  icon={<CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />}
-                  onClick={() => setShowCalendar(!showCalendar)}
-                >
-                  <span className="hidden sm:inline">Calendrier des parties</span>
-                  <span className="sm:hidden">Calendrier</span>
-                </Button>
-              </motion.div>
-            </div>
+            {/* Left Controls - archive shown by default; button removed */}
+            <div className="flex items-center justify-center sm:justify-start w-full sm:w-auto" />
 
             {/* Right Controls - Game Stats */}
             <div className="flex items-center justify-center flex-wrap gap-2 sm:gap-3 lg:gap-6 w-full sm:w-auto">
-              {todaysPuzzles.length > 0 && currentPuzzle && currentPuzzle.language && (
+              { !showArchive && todaysPuzzles.length > 0 && currentPuzzle && currentPuzzle.language && (
                 <>
                   {/* Language indicator */}
                   <motion.div
@@ -298,49 +281,34 @@ const PlayerPage = () => {
             </div>
           </motion.div>
 
-          {/* Calendar */}
-          <AnimatePresence>
-            {showCalendar && (
-              <>
-                {/* Backdrop to close calendar and prevent underlying focus (hides mobile keyboard) */}
-                <motion.div
-                  key="calendar-backdrop"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.4 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="fixed inset-0 bg-black z-30"
-                  onClick={() => {
-                    setShowCalendar(false);
-                    // Blur any active element to hide mobile keyboard
-                    if (document.activeElement instanceof HTMLElement) {
-                      document.activeElement.blur();
-                    }
-                  }}
-                />
+          {/* Archive inline panel */}
+          {showArchive && (
+            <div className="mb-6">
+              <PuzzleList
+                puzzleDates={puzzleDates}
+                puzzles={todaysPuzzles}
+                fetchPuzzlesByDate={fetchPuzzlesByDate}
+                fetchAllPuzzles={fetchAllPuzzles}
+                loading={loading}
+                onSelectPuzzle={(p) => {
+                  console.debug('PlayerPage: onSelectPuzzle called', p && p.id);
+                  if (p && p.id) {
+                    setSelectedPuzzle(p);
+                    // ensure archive is hidden only after we set a valid puzzle
+                    setShowArchive(false);
+                    setOpenedFromArchive(true);
+                  } else {
+                    console.warn('PlayerPage: received invalid puzzle for selection', p);
+                  }
+                }}
+              />
+            </div>
+          )}
 
-                <motion.div
-                  key="calendar-panel"
-                  initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.98 }}
-                  transition={{ duration: 0.35, ease: "easeOut" }}
-                  className="relative z-40 mb-12"
-                >
-                  <div className="mx-auto max-w-3xl backdrop-blur-lg bg-white/10 rounded-3xl border border-white/20 p-6 shadow-2xl">
-                    <Calendar
-                      puzzleDates={puzzleDates}
-                      selectedDate={selectedDate}
-                      onDateSelect={handleDateSelect}
-                    />
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>
+          {/* debug panel removed */}
 
-          {/* Game of the Day Section */}
-          {hasPuzzles ? (
+          {/* Game of the Day Section (hidden when archive is visible) */}
+          {!showArchive && (hasPuzzles ? (
             <motion.div 
               className="mb-12"
               initial={{ opacity: 0, y: 30 }}
@@ -361,7 +329,7 @@ const PlayerPage = () => {
                   </h2>
                 </motion.div>
                 
-                {hasMultiplePuzzles && (
+                {effectiveHasMultiplePuzzles && (
                   <motion.div
                     className="flex items-center space-x-2 sm:space-x-3 lg:space-x-4 backdrop-blur-lg bg-white/10 rounded-xl lg:rounded-2xl border border-white/20 p-2 sm:p-2.5 lg:p-3 shadow-xl"
                     initial={{ x: 30, opacity: 0 }}
@@ -391,84 +359,60 @@ const PlayerPage = () => {
                     </motion.button>
                   </motion.div>
                 )}
+                {openedFromArchive && (
+                  <div className="ml-4">
+                    <Button
+                      className="bg-white/10 text-white px-3 py-2 rounded-lg hover:bg-white/20"
+                      onClick={() => { setShowArchive(true); setOpenedFromArchive(false); }}
+                    >
+                      Retour aux archives
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Main Game Layout */}
-              <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 lg:gap-8">
+              <div className="flex justify-center">
                 {/* Crossword Grid Container */}
                 <motion.div
                   initial={{ opacity: 0, x: -50 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 2.4, duration: 0.8 }}
-                  className="lg:col-span-2 order-1 lg:order-1"
+                  className="backdrop-blur-lg bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-6 lg:p-8 shadow-2xl"
                 >
                   {/* Grid Card */}
-                  <div className="backdrop-blur-lg bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-6 lg:p-8 shadow-2xl">
-                    <div className="player-grid-force-ltr">
-                      <CrosswordGrid
-                        puzzle={currentPuzzle}
-                        resetGame={resetGame}
-                        onCellSelect={() => {}}
-                        onWordSelect={selectWord}
-                      />
-                    </div>
+                  <div className="player-grid-force-ltr">
+                    <CrosswordGrid
+                      puzzle={currentPuzzle}
+                      resetGame={resetGame}
+                      onCellSelect={() => {}}
+                      onWordSelect={selectWord}
+                    />
                   </div>
-                </motion.div>
-
-                {/* Clues Panel */}
-                <motion.div
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 2.6, duration: 0.8 }}
-                  className="backdrop-blur-lg bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-4 lg:p-6 shadow-2xl order-2 lg:order-2"
-                >
-                  <CluesPanel
-                    puzzle={currentPuzzle}
-                    selectedWord={selectedWord}
-                    onWordSelect={selectWord}
-                    language={language}
-                  />
                 </motion.div>
               </div>
             </motion.div>
           ) : (
             <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 2, duration: 0.6, ease: "backOut" }}
+              transition={{ delay: 0.2, duration: 0.4 }}
               className="text-center py-20"
             >
               <div className="backdrop-blur-lg bg-white/10 rounded-3xl border border-white/20 p-12 max-w-md mx-auto shadow-2xl">
-                <motion.div
-                  animate={{ rotate: [0, 10, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                  className="mb-6"
-                >
-                  <CalendarIcon className="w-16 h-16 text-yellow-400 mx-auto" />
-                </motion.div>
-                
-                <h3 className="text-2xl font-bold text-white mb-4">
-                  Aucun puzzle pour cette date
-                </h3>
-                <p className="text-white/70 mb-8">
-                  Explorez d'autres dates dans le calendrier pour découvrir de nouveaux défis !
-                </p>
-                
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
+                <h3 className="text-2xl font-bold text-white mb-4">Aucun puzzle disponible</h3>
+                <p className="text-white/70 mb-6">Les puzzles seront récupérés automatiquement — vous pouvez forcer une actualisation.</p>
+                <div>
                   <Button
-                    className="bg-gradient-to-r from-yellow-400 to-pink-400 text-white font-semibold px-8 py-4 rounded-2xl border-none shadow-xl"
-                    icon={<CalendarIcon className="w-5 h-5 mr-2" />}
-                    onClick={() => setShowCalendar(true)}
+                    className="bg-gradient-to-r from-yellow-400 to-pink-400 text-white font-semibold px-6 py-3 rounded-2xl border-none shadow-xl"
+                    onClick={() => fetchAllPuzzles()}
                   >
-                    Ouvrir le calendrier
+                    Rafraîchir les puzzles
                   </Button>
-                </motion.div>
+                </div>
               </div>
             </motion.div>
-          )}
+          ))}
         </div>
 
         {/* Completion Celebration */}

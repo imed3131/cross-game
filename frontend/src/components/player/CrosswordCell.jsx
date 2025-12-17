@@ -9,6 +9,8 @@ const CrosswordCell = ({
   isHovered,
   isBlackCell,
   cellNumber,
+  selectedWord,
+  onNumberClick,
   row,
   col,
   onClick,
@@ -141,6 +143,8 @@ const CrosswordCell = ({
     );
   }
 
+  const isStartingCellOfSelectedWord = !!(selectedWord && selectedWord.startRow === row && selectedWord.startCol === col);
+
   return (
     <div 
       className={`
@@ -150,19 +154,26 @@ const CrosswordCell = ({
         ${isHovered ? 'bg-gray-50' : 'bg-white'}
         ${className}
       `}
-      onClick={handleClick}
+      /* Do not attach click on whole cell to avoid toggling clue when typing */
       onMouseEnter={() => onMouseEnter && onMouseEnter(row, col)}
       onMouseLeave={() => onMouseLeave && onMouseLeave()}
     >
-      {/* Cell number */}
+      {/* Number button: clicking this toggles the clue. It's separate from the input area. */}
       {cellNumber && (
-        <span className="absolute top-0 left-0 text-xs leading-none p-0.5 text-gray-600 font-medium">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (typeof onNumberClick === 'function') onNumberClick(row, col);
+          }}
+          className="absolute top-0 left-0 text-xs leading-none p-0.5 text-gray-600 font-medium w-5 h-5 flex items-center justify-center rounded"
+        >
           {cellNumber}
-        </span>
+        </button>
       )}
-      
+
       {/* Input field */}
-  <input
+      <input
         ref={inputRef}
         type="text"
         value={inputValue}

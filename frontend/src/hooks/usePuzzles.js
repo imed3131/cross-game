@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { playerAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
+// notifications disabled - using console logs
 
 export const usePuzzles = () => {
   const [todaysPuzzles, setTodaysPuzzles] = useState([]);
@@ -19,10 +19,28 @@ export const usePuzzles = () => {
       if (response.data.length > 0 && !selectedPuzzle) {
         setSelectedPuzzle(response.data[0]);
       }
+      return response;
     } catch (error) {
       console.error('Failed to fetch today\'s puzzles:', error);
-      setError('Failed to load today\'s puzzles');
-      toast.error('Failed to load today\'s puzzles');
+  setError('Failed to load today\'s puzzles');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fetch all published puzzles
+  const fetchAllPuzzles = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await playerAPI.getAllPuzzles();
+      setTodaysPuzzles(response.data);
+      if (response.data.length > 0 && !selectedPuzzle) {
+        setSelectedPuzzle(response.data[0]);
+      }
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch all puzzles:', error);
+  setError('Failed to load puzzles');
     } finally {
       setLoading(false);
     }
@@ -31,18 +49,18 @@ export const usePuzzles = () => {
   // Fetch puzzles by date
   const fetchPuzzlesByDate = async (date) => {
     try {
-      setLoading(true);
+      // Don't set loading to avoid re-rendering PuzzleList
       const response = await playerAPI.getPuzzlesByDate(date);
-      setTodaysPuzzles(response.data);
+      // Don't update todaysPuzzles to avoid re-rendering PuzzleList
       if (response.data.length > 0) {
         setSelectedPuzzle(response.data[0]);
       } else {
         setSelectedPuzzle(null);
       }
+      return response;
     } catch (error) {
       console.error('Failed to fetch puzzles by date:', error);
-      setError('Failed to load puzzles for selected date');
-      toast.error('Failed to load puzzles for selected date');
+  setError('Failed to load puzzles for selected date');
     } finally {
       setLoading(false);
     }
@@ -53,9 +71,10 @@ export const usePuzzles = () => {
     try {
       const response = await playerAPI.getAllPuzzleDates();
       setPuzzleDates(response.data);
+  return response;
     } catch (error) {
       console.error('Failed to fetch puzzle dates:', error);
-      toast.error('Failed to load puzzle calendar');
+  // silent failure for calendar - fall back to empty
     }
   };
 
@@ -81,7 +100,7 @@ export const usePuzzles = () => {
   useEffect(() => {
     if (!initRef.current) {
       initRef.current = true;
-      fetchTodaysPuzzles();
+  fetchAllPuzzles();
       fetchPuzzleDates();
     }
   }, []);
@@ -94,6 +113,7 @@ export const usePuzzles = () => {
     loading,
     error,
     fetchTodaysPuzzles,
+  fetchAllPuzzles,
     fetchPuzzlesByDate,
     fetchPuzzleDates,
     submitSolution,

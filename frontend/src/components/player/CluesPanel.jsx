@@ -9,6 +9,7 @@ const CluesPanel = ({
   language,
   className = '' 
 }) => {
+  // If no puzzle loaded, render a small placeholder
   if (!puzzle) {
     return (
       <div className={`bg-white rounded-2xl shadow-lg p-6 ${className}`}>
@@ -17,85 +18,10 @@ const CluesPanel = ({
     );
   }
 
-  const handleWordClick = (clue, direction) => {
-    // Si l'indice est déjà sélectionné, le désélectionner
-    if (isWordSelected(clue, direction)) {
-      onWordSelect?.(null);
-      return;
-    }
-
-    // Simple approach: clue number directly corresponds to row/column
-    const number = clue.number || parseInt(clue);
-
-    const word = {
-      number,
-      clue: clue.clue || clue,
-      direction
-    };
-
-    onWordSelect?.(word);
-  };
-
-  const isWordSelected = (clue, direction) => {
-    return selectedWord && 
-           selectedWord.number === clue.number && 
-           selectedWord.direction === direction;
-  };
-
-  const renderClue = (clue, direction) => {
-    const isArabic = language === 'AR';
-    return (
-      <motion.div
-        key={`${direction}-${clue.number}`}
-        className={`
-          p-3 rounded-lg cursor-pointer border-2 transition-all duration-200
-          ${isWordSelected(clue, direction)
-            ? 'bg-primary-100 border-primary-300 shadow-md' 
-            : 'bg-gray-50 border-transparent hover:bg-gray-100 hover:border-gray-200'
-          }
-        `}
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={() => handleWordClick(clue, direction)}
-        layout
-      >
-      <div className="flex items-start gap-3">
-        <div className={`
-          inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0
-          ${isWordSelected(clue, direction)
-            ? 'bg-primary-600 text-white' 
-            : 'bg-gray-300 text-gray-700'
-          }
-        `}>
-          {clue.number}
-        </div>
-        
-        <div className="flex-1 min-w-0 overflow-hidden">
-          <p className={`
-            text-sm leading-relaxed break-words hyphens-auto
-            ${isWordSelected(clue, direction) 
-              ? 'text-primary-900 font-medium' 
-              : 'text-gray-700'
-            }
-            ${isArabic ? 'text-right font-arabic' : 'text-left'}
-          `}
-          style={{
-            direction: isArabic ? 'rtl' : 'ltr',
-            unicodeBidi: 'plaintext'
-          }}>
-            {typeof clue.clue === 'string' ? clue.clue : JSON.stringify(clue.clue)}
-          </p>
-          
-          {clue.answer && process.env.NODE_ENV === 'development' && (
-            <p className="text-xs text-red-500 mt-1 font-mono break-all">
-              Debug: {clue.answer}
-            </p>
-          )}
-        </div>
-      </div>
-    </motion.div>
-    );
-  };
+  // Display only the currently selected word's clue.
+  // Clicking the same numbered cell toggles the selection (handled by CrosswordGrid/selectWord).
+  const selected = selectedWord;
+  const isArabic = language === 'AR';
 
   return (
     <motion.div
@@ -104,44 +30,28 @@ const CluesPanel = ({
       className={`bg-white rounded-xl lg:rounded-2xl shadow-lg p-3 sm:p-4 lg:p-6 ${className}`}
     >
       <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-3 sm:mb-4 lg:mb-6 text-center">
-        Indices
+        Indice
       </h2>
-      
-      <div className="space-y-3 sm:space-y-4 lg:space-y-6 overflow-hidden">
-        {/* Horizontal Clues */}
-        <div className="min-h-0">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3 lg:mb-4 flex items-center">
-            <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-blue-600" />
-            <span className="text-blue-600">Horizontal</span>
-          </h3>
-          
-          <div className="space-y-2 max-h-64 overflow-y-auto overflow-x-hidden scrollbar-thin">
-            <AnimatePresence>
-              {puzzle.cluesHorizontal && Object.entries(puzzle.cluesHorizontal).map(([number, clueText]) => 
-                renderClue({ number: parseInt(number), clue: clueText }, 'horizontal')
-              )}
-            </AnimatePresence>
+
+      {selected ? (
+        <div className="p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${'bg-primary-600 text-white'}`}>
+              {selected.number}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p
+                className={`text-sm leading-relaxed break-words ${isArabic ? 'text-right font-arabic' : 'text-left'}`}
+                style={{ direction: isArabic ? 'rtl' : 'ltr', unicodeBidi: 'plaintext' }}
+              >
+                {selected.clue}
+              </p>
+            </div>
           </div>
         </div>
-        
-        {/* Vertical Clues */}
-        <div className="min-h-0">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2 sm:mb-3 lg:mb-4 flex items-center">
-            <ArrowDown className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2 text-green-600" />
-            <span className="text-green-600">Vertical</span>
-          </h3>
-          
-          <div className="space-y-1.5 sm:space-y-2 max-h-48 sm:max-h-56 lg:max-h-64 overflow-y-auto overflow-x-hidden scrollbar-thin">
-            <AnimatePresence>
-              {puzzle.cluesVertical && Object.entries(puzzle.cluesVertical).map(([number, clueText]) => 
-                renderClue({ number: parseInt(number), clue: clueText }, 'vertical')
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-
-
+      ) : (
+        <div className="text-center text-sm text-gray-600">Cliquez sur un numéro dans la grille pour afficher l'indice.</div>
+      )}
     </motion.div>
   );
 };
