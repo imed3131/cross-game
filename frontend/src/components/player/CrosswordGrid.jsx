@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
 import CrosswordCell from './CrosswordCell';
@@ -29,21 +28,22 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [cellRefs, setCellRefs] = useState({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
-  const [currentTime, setCurrentTime] = useState(0);
-  const [preferredDirection, setPreferredDirection] = useState('right'); // Default to right
-  const [floatingClue, setFloatingClue] = useState({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '', position: undefined, width: undefined, measuring: false, anchorRect: null });
-  const tooltipRef = useRef(null);
-  // Update timer every second - use state callback to avoid function dependency
+  const [preferredDirection, setPreferredDirection] = useState('right');
+  const [activeClueId, setActiveClueId] = useState(null);
+
+  // Centralized close helper (and debug logging)
+  const closeActiveClue = useCallback(() => {
+    // eslint-disable-next-line no-console
+    console.debug('closeActiveClue invoked', { activeClueId, stack: (new Error()).stack });
+    setActiveClueId(null);
+  }, [activeClueId]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(getElapsedTime());
-    }, 1000);
-    setCurrentTime(getElapsedTime());
-    return () => clearInterval(interval);
-  }, [getElapsedTime]);
+    // eslint-disable-next-line no-console
+    console.debug('activeClueId changed ->', activeClueId);
+  }, [activeClueId]);
 
-  // Track whether the horizontal container is overflowing so we can left-align when needed
+  // Track overflow for horizontal scrolling
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -65,7 +65,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         if (ov !== prevOverflowRef.current) {
           prevOverflowRef.current = ov;
           setIsOverflowing(ov);
-          // Only force scroll to left when overflow first appears and user is not actively scrolling
           if (ov && !userScrolled) {
             try { el.scrollLeft = 0; } catch (e) { /* ignore */ }
           }
@@ -96,25 +95,25 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     };
   }, [puzzle, currentGrid]);
   
-  // Handle click outside to close floating clue
+  // Handle click outside to close clue
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (floatingClue.show && gridRef.current && !gridRef.current.contains(event.target)) {
-  setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '', position: undefined, width: undefined });
+      if (activeClueId && gridRef.current && !gridRef.current.contains(event.target)) {
+        closeActiveClue();
         selectWord(null);
         onWordSelect?.(null);
       }
     };
 
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && floatingClue.show) {
-        setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '' });
+      if (event.key === 'Escape' && activeClueId) {
+        closeActiveClue();
         selectWord(null);
         onWordSelect?.(null);
       }
     };
 
-    if (floatingClue.show) {
+    if (activeClueId) {
       document.addEventListener('mousedown', handleClickOutside);
       document.addEventListener('touchstart', handleClickOutside);
       document.addEventListener('keydown', handleKeyDown);
@@ -125,12 +124,10 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [floatingClue.show, selectWord, onWordSelect]);
+  }, [activeClueId, selectWord, onWordSelect]);
 
-  // Update timer immediately after reset
   const handleResetTimer = () => {
     resetTimer();
-    setCurrentTime(0);
   };
 
   const numRows = puzzle?.rows || currentGrid?.length || 15;
@@ -145,24 +142,16 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
     switch (direction) {
       case 'right':
-        if (currentCol < numCols - 1) {
-          newCol = currentCol + 1;
-        }
+        if (currentCol < numCols - 1) newCol = currentCol + 1;
         break;
       case 'left':
-        if (currentCol > 0) {
-          newCol = currentCol - 1;
-        }
+        if (currentCol > 0) newCol = currentCol - 1;
         break;
       case 'up':
-        if (currentRow > 0) {
-          newRow = currentRow - 1;
-        }
+        if (currentRow > 0) newRow = currentRow - 1;
         break;
       case 'down':
-        if (currentRow < numRows - 1) {
-          newRow = currentRow + 1;
-        }
+        if (currentRow < numRows - 1) newRow = currentRow + 1;
         break;
     }
 
@@ -173,32 +162,20 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
       switch (direction) {
         case 'right':
-          if (newCol < numCols - 1) {
-            newCol++;
-          } else {
-            return; // Can't move further right
-          }
+          if (newCol < numCols - 1) newCol++;
+          else return;
           break;
         case 'left':
-          if (newCol > 0) {
-            newCol--;
-          } else {
-            return; // Can't move further left
-          }
+          if (newCol > 0) newCol--;
+          else return;
           break;
         case 'up':
-          if (newRow > 0) {
-            newRow--;
-          } else {
-            return; // Can't move further up
-          }
+          if (newRow > 0) newRow--;
+          else return;
           break;
         case 'down':
-          if (newRow < numRows - 1) {
-            newRow++;
-          } else {
-            return; // Can't move further down
-          }
+          if (newRow < numRows - 1) newRow++;
+          else return;
           break;
       }
     }
@@ -212,89 +189,24 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     
     updateGridCell(row, col, value);
     
-    // Auto-navigate in preferred direction after typing a letter
     if (value && value.trim() !== '') {
       setTimeout(() => {
         handleCellNavigation(preferredDirection, row, col);
-      }, 10); // Small delay to ensure the cell update completes
+      }, 10);
     }
   }, [puzzle, currentGrid, updateGridCell, preferredDirection, handleCellNavigation]);
 
-  // Prepare floating clue element. We render it via a portal to document.body when position is 'fixed'
-  const renderFloatingClue = () => {
-    if (!floatingClue.show) return null;
-
-    const style = {
-      position: floatingClue.position === 'fixed' ? 'fixed' : 'absolute',
-      top: floatingClue.top + 'px',
-      left: floatingClue.left + 'px',
-      // set transform only when explicitly provided (otherwise rely on absolute left/top)
-      ...(floatingClue.transform ? { transform: floatingClue.transform } : {}),
-      width: floatingClue.width ? floatingClue.width + 'px' : undefined,
-      maxWidth: 'min(300px, 80vw)',
-      zIndex: 1000
-    };
-
-    const element = (
-      <div
-        ref={tooltipRef}
-        className={`floating-clue ${floatingClue.arrowClass} ${language === 'ar' ? 'rtl' : ''}`}
-        data-visible="true"
-        role="dialog"
-        aria-modal="false"
-        aria-label={`Indice ${floatingClue.type === 'row' ? 'ligne' : 'colonne'} ${floatingClue.index + 1}`}
-        style={{
-          // When measuring, render off-screen to avoid transforms/position affecting measurement
-          ...(floatingClue.measuring ? { position: 'fixed', left: '-9999px', top: '-9999px', opacity: 0, pointerEvents: 'none' } : style),
-          // expose arrow offset variables if present
-          ['--arrow-left']: floatingClue.arrowLeft !== undefined ? `${floatingClue.arrowLeft}px` : undefined,
-          ['--arrow-top']: floatingClue.arrowTop !== undefined ? `${floatingClue.arrowTop}px` : undefined,
-          ['--arrow-size']: floatingClue.width ? '14px' : '14px'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          className="clue-close"
-          onClick={() => setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '', position: undefined, width: undefined })}
-          aria-label="Fermer indice"
-          title="Fermer"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <path d="M18 6L6 18" />
-            <path d="M6 6l12 12" />
-          </svg>
-        </button>
-        <div>
-          <div className="clue-badge">Indice {floatingClue.index + 1}</div>
-          <div className={`clue-body ${language === 'ar' ? 'font-arabic' : ''}`}>{floatingClue.clue}</div>
-        </div>
-      </div>
-    );
-
-    if (floatingClue.position === 'fixed' && typeof document !== 'undefined') {
-      return createPortal(element, document.body);
-    }
-
-    return element;
-  };
-
   const handleCellClick = (row, col) => {
     if (!puzzle || !currentGrid) return;
-    
-    // Don't select black cells
     if (puzzle.solution[row][col] === '') return;
     
     selectCell(row, col);
     onCellSelect?.(row, col);
     
-    // Find intersecting words (adapted for simplified object format)
     const intersecting = [];
+    const rowNumber = row + 1;
+    const colNumber = col + 1;
     
-    // For simplified system: check if current position intersects with row/column clues
-    const rowNumber = row + 1; // Convert to 1-based
-    const colNumber = col + 1; // Convert to 1-based
-    
-    // Check horizontal clue (entire row)
     if (puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber]) {
       intersecting.push({
         number: rowNumber,
@@ -306,7 +218,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       });
     }
     
-    // Check vertical clue (entire column)  
     if (puzzle.cluesVertical && puzzle.cluesVertical[colNumber]) {
       intersecting.push({
         number: colNumber,
@@ -319,13 +230,11 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     }
     
     if (intersecting.length > 0) {
-      // If the same numbered word is already selected, toggle it off
       const firstWord = { ...intersecting[0], direction: intersecting[0].direction || (intersecting[0].startRow === row ? 'horizontal' : 'vertical') };
       if (selectedWord && selectedWord.number === firstWord.number && (selectedWord.direction === firstWord.direction || intersecting.length === 1)) {
         selectWord(null);
         onWordSelect?.(null);
       } else if (selectedCell.row === row && selectedCell.col === col && intersecting.length > 1) {
-        // If same cell clicked and multiple intersecting words, cycle to next
         const currentWordIndex = intersecting.findIndex(word => 
           selectedWord && 
           word.number === selectedWord.number && 
@@ -341,126 +250,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       }
     }
   };
-
-  // Measure tooltip and reposition precisely when in measuring mode
-  useLayoutEffect(() => {
-    if (!floatingClue.show || !floatingClue.measuring || !tooltipRef.current || !floatingClue.anchorRect) return;
-
-    const tipEl = tooltipRef.current;
-    const anchor = floatingClue.anchorRect;
-  let tipRect = tipEl.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // If tooltip is wider than viewport, constrain width and re-measure so it wraps vertically
-    const horizontalPadding = 16; // keep edges
-    if (tipRect.width > viewportWidth - horizontalPadding) {
-      const newWidth = Math.max(140, viewportWidth - horizontalPadding);
-      tipEl.style.width = `${newWidth}px`;
-      // reflow and re-measure
-      const newRect = tipEl.getBoundingClientRect();
-      // update tipRect reference
-      // eslint-disable-next-line prefer-const
-      tipRect = newRect;
-    }
-
-    let top = floatingClue.top;
-    let left = floatingClue.left;
-    let arrowLeft = undefined;
-    let arrowTop = undefined;
-
-    if (floatingClue.type === 'col') {
-      // Compute absolute tooltip left (no translate) so positioning is deterministic
-      const anchorCenterX = anchor.left + anchor.width / 2;
-      // Default above the anchor
-      if (anchor.top >= tipRect.height + 24) {
-        top = anchor.top - tipRect.height - 10;
-      } else {
-        top = anchor.bottom + 10;
-      }
-      // desired left so tooltip is centered on anchor
-      let desiredLeft = anchorCenterX - tipRect.width / 2;
-      // Clamp horizontally
-      const minLeft = 8;
-      const maxLeft = viewportWidth - 8 - tipRect.width;
-      if (desiredLeft < minLeft) desiredLeft = minLeft;
-      if (desiredLeft > maxLeft) desiredLeft = maxLeft;
-      left = desiredLeft;
-      // Arrow offset relative to tooltip left
-      arrowLeft = anchorCenterX - left;
-    } else if (floatingClue.type === 'row') {
-      // Center vertically on anchor and place left or right of it
-      const anchorCenterY = anchor.top + anchor.height / 2;
-      // desired top so tooltip is centered on anchor vertically
-      let desiredTop = anchorCenterY - tipRect.height / 2;
-      // Clamp vertically and leave a safe bottom margin for controls
-      const minTop = 8;
-      // Attempt to compute safe bottom area from page controls (timer) if present
-      let bottomSafe = 80; // default
-      try {
-        const timerEl = document.querySelector('.timer-controls') || document.querySelector('.inline-timer');
-        if (timerEl) {
-          const tRect = timerEl.getBoundingClientRect();
-          bottomSafe = Math.max(bottomSafe, Math.ceil(tRect.height) + 24);
-        }
-      } catch (e) {
-        // ignore
-      }
-      const maxTop = viewportHeight - bottomSafe - tipRect.height;
-      if (desiredTop < minTop) desiredTop = minTop;
-      if (desiredTop > maxTop) desiredTop = maxTop;
-      top = desiredTop;
-      // Prefer left side if space available (with small padding)
-      const padding = 12;
-      const preferLeft = anchor.left >= tipRect.width + padding * 2;
-      if (preferLeft) {
-        left = anchor.left - padding - tipRect.width;
-      } else {
-        left = anchor.right + padding;
-      }
-      // Clamp horizontally so tooltip stays visible
-      const minLeft = 8;
-      const maxLeft = viewportWidth - 8 - tipRect.width;
-      if (left < minLeft) left = minLeft;
-      if (left > maxLeft) left = maxLeft;
-      // Arrow vertical offset relative to tooltip top
-      arrowTop = anchorCenterY - top;
-    }
-
-    // Normalize arrow offsets to be within the tooltip box (padding 12px)
-    if (arrowLeft !== undefined) {
-      const maxLeft = tipRect.width - 12;
-      if (arrowLeft < 12) arrowLeft = 12;
-      if (arrowLeft > maxLeft) arrowLeft = maxLeft;
-    }
-    if (arrowTop !== undefined) {
-      const maxTop = tipRect.height - 12;
-      if (arrowTop < 12) arrowTop = 12;
-      if (arrowTop > maxTop) arrowTop = maxTop;
-    }
-
-  // Decide arrow orientation based on final placement
-  let finalArrowClass = floatingClue.arrowClass || '';
-    if (floatingClue.type === 'col') {
-      // if tooltip is above anchor, arrow should point down, else up
-      finalArrowClass = (top < anchor.top) ? 'arrow-down' : 'arrow-up';
-    } else if (floatingClue.type === 'row') {
-      // if tooltip is to the left of anchor, arrow should point right, else left
-      finalArrowClass = (left + tipRect.width / 2 < anchor.left + anchor.width / 2) ? 'arrow-right' : 'arrow-left';
-    }
-
-    // Update state to show the tooltip (measuring done)
-    setFloatingClue(prev => ({
-      ...prev,
-      top,
-      left,
-      transform: '',
-      measuring: false,
-      arrowLeft,
-      arrowTop,
-      arrowClass: finalArrowClass
-    }));
-  }, [floatingClue.show, floatingClue.measuring, floatingClue.anchorRect]);
 
   const handleCellMouseEnter = (row, col) => {
     setHoveredCell({ row, col });
@@ -478,29 +267,14 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     return hoveredCell && hoveredCell.row === row && hoveredCell.col === col;
   };
 
-
   const getCellNumber = (row, col) => {
-    // For the simplified grid system where:
-    // - Horizontal clues are numbered by row (1-based)  
-    // - Vertical clues are numbered by column (1-based)
-    
-    const rowNumber = row + 1; // Convert to 1-based
-    const colNumber = col + 1; // Convert to 1-based
-    
-    // Show numbers in appropriate positions based on language
+    const rowNumber = row + 1;
+    const colNumber = col + 1;
     const isBlackCell = puzzle.solution?.[row]?.[col] === '' || puzzle.solution?.[row]?.[col] === '#';
     if (isBlackCell) return null;
     
-  // For Arabic we want the grid to appear like the French layout but
-  // with numbers located as follows:
-  // - Row numbers on the right side
-  // - Column numbers on the top
-  // For French (LTR) we keep: row numbers on the left, column numbers on the top
-  // Show row numbers on the leftmost column for both languages
-  const showRowNumber = (col === 0);
-
-  // Show column numbers: always on the top row for both languages
-  const showColNumber = (row === 0);
+    const showRowNumber = (col === 0);
+    const showColNumber = (row === 0);
     
     if (showRowNumber && puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber]) {
       return rowNumber;
@@ -510,6 +284,147 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     }
     
     return null;
+  };
+
+  // Clue component that's rendered inside each wrapper
+  const ClueTooltip = ({ clueId, clue, onClose }) => {
+    const [position, setPosition] = useState({ side: 'bottom', arrowOffset: 0 });
+    const clueRef = useRef(null);
+    
+    useLayoutEffect(() => {
+      if (!clueRef.current) return;
+      
+      const clueEl = clueRef.current;
+      const compute = () => {
+        const wrapper = clueEl.closest('.clue-wrapper');
+        const anchor = wrapper?.querySelector('.clue-anchor');
+        if (!wrapper || !anchor) return;
+        
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const anchorRect = anchor.getBoundingClientRect();
+        const clueRect = clueEl.getBoundingClientRect();
+        
+        // Find nearest clipping ancestor
+        let clipAncestor = wrapper.parentElement;
+        while (clipAncestor && clipAncestor !== document.body) {
+          const style = getComputedStyle(clipAncestor);
+          if (style.overflow !== 'visible' || style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+            break;
+          }
+          clipAncestor = clipAncestor.parentElement;
+        }
+        const clipRect = clipAncestor ? clipAncestor.getBoundingClientRect() : { 
+          top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth 
+        };
+        
+        // Unified placement: render clues above their anchor (same as column behavior)
+        const side = 'top';
+        
+        // Calculate arrow offset in wrapper coordinates
+        let anchorCenterX = anchorRect.left + anchorRect.width / 2 - wrapperRect.left;
+        let anchorCenterY = anchorRect.top + anchorRect.height / 2 - wrapperRect.top;
+        
+        let arrowOffset = 0;
+        if (side === 'top' || side === 'bottom') {
+          const clueLeft = anchorRect.left + anchorRect.width / 2 - clueRect.width / 2 - wrapperRect.left;
+          arrowOffset = anchorCenterX - clueLeft;
+          // clamp
+          const min = 12;
+          const max = Math.max(min, clueRect.width - 12);
+          if (arrowOffset < min) arrowOffset = min;
+          if (arrowOffset > max) arrowOffset = max;
+        } else {
+          const clueTop = anchorRect.top + anchorRect.height / 2 - clueRect.height / 2 - wrapperRect.top;
+          arrowOffset = anchorCenterY - clueTop;
+          const min = 12;
+          const max = Math.max(min, clueRect.height - 12);
+          if (arrowOffset < min) arrowOffset = min;
+          if (arrowOffset > max) arrowOffset = max;
+        }
+        
+        setPosition({ side, arrowOffset });
+      };
+      
+      compute();
+      window.addEventListener('resize', compute);
+      window.addEventListener('scroll', compute, true);
+      return () => {
+        window.removeEventListener('resize', compute);
+        window.removeEventListener('scroll', compute, true);
+      };
+    }, [clueId]);
+    
+    const getPositionStyles = () => {
+      const { side } = position;
+      const base = { position: 'absolute', zIndex: 9999 };
+      
+      if (side === 'bottom') {
+        return { ...base, top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' };
+      } else if (side === 'top') {
+        return { ...base, bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' };
+      } else if (side === 'right') {
+        return { ...base, left: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' };
+      } else {
+        return { ...base, right: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' };
+      }
+    };
+    
+    const arrowClassMap = { top: 'arrow-down', bottom: 'arrow-up', left: 'arrow-right', right: 'arrow-left' };
+    const arrowClass = arrowClassMap[position.side] || 'arrow-down';
+    const clueNumber = clueId.startsWith('col-') ? clueId.split('-')[1] : clueId.split('-')[1];
+    
+    return (
+      <div 
+        ref={clueRef}
+        className={`floating-clue ${arrowClass} ${language === 'ar' ? 'rtl' : ''}`}
+        data-visible="true"
+        style={{
+          ...getPositionStyles(),
+          '--arrow-left': position.side === 'top' || position.side === 'bottom' ? `${position.arrowOffset}px` : undefined,
+          '--arrow-top': position.side === 'left' || position.side === 'right' ? `${position.arrowOffset}px` : undefined,
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseEnter={(e) => e.stopPropagation()}
+        onMouseLeave={(e) => e.stopPropagation()}
+        onMouseOver={(e) => e.stopPropagation()}
+        onFocus={(e) => e.stopPropagation()}
+        onBlur={(e) => e.stopPropagation()}
+      >
+        <button 
+          className="clue-close" 
+          onClick={onClose}
+          aria-label="Fermer" 
+          title="Fermer"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6L6 18" /><path d="M6 6l12 12" />
+          </svg>
+        </button>
+        <div>
+          <div className="clue-badge">Indice {clueNumber}</div>
+          <div className={`clue-body ${language === 'ar' ? 'font-arabic' : ''}`}>{clue}</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Small timer component that updates itself so the grid doesn't re-render every second
+  const TimerDisplay = ({ getElapsedTime, isPaused }) => {
+    const [time, setTime] = useState(() => getElapsedTime());
+    useEffect(() => {
+      const tick = () => setTime(getElapsedTime());
+      const id = setInterval(tick, 1000);
+      tick();
+      return () => clearInterval(id);
+    }, [getElapsedTime]);
+
+    const mm = String(Math.floor(time / 60)).padStart(2, '0');
+    const ss = String(time % 60).padStart(2, '0');
+    return (
+      <span className={`text-sm font-medium ${isPaused ? 'text-orange-600' : 'text-gray-700'}`}>
+        Temps: {mm}:{ss} {isPaused && '(Pause)'}
+      </span>
+    );
   };
 
   // Early return if no valid grid data
@@ -524,13 +439,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     );
   }
 
-  // Always render grid LTR, even for Arabic
-  const isRTL = false;
-
-  // Handle navigation between cells
-
-
-  // Conditional rendering AFTER all hooks have been called
   if (!puzzle) {
     return (
       <div className="grid gap-1 p-4 bg-white rounded-2xl shadow-lg">
@@ -548,11 +456,6 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
     >
-
-  {/* arrow pseudo-elements are defined in CSS (`src/index.css`) to avoid duplication */}
-
-  {/* Floating clue (rendered via portal when fixed) */}
-  {renderFloatingClue()}
       <div className="mb-4">
         <h3 className="text-base sm:text-lg font-bold text-center mb-1 sm:mb-2">{puzzle.title}</h3>
         <div className="text-xs sm:text-sm text-gray-600 text-center">
@@ -561,9 +464,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         </div>
       </div>
 
-      {/* Grid with separate top column headers and left row headers (Option A) */}
       <div className="flex justify-center mb-4">
-        <div ref={scrollRef} className={`w-full overflow-x-auto overflow-y-visible flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
+        <div ref={scrollRef} className={`w-full overflow-visible flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
           <div className="w-auto">
             <div className="player-grid-force-ltr" dir="ltr" style={{ direction: 'ltr', width: 'max-content' }}>
               {/* Top header row */}
@@ -573,72 +475,41 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                   {Array.from({ length: numCols }).map((_, colIndex) => {
                     const colNumber = colIndex + 1;
                     const hasClue = puzzle.cluesVertical && puzzle.cluesVertical[colNumber];
+                    const clueId = `col-${colNumber}`;
+                    const isActive = activeClueId === clueId;
+                    
                     return (
-                      <div key={`col-head-${colIndex}`} className="relative">
+                      <div key={`col-head-${colIndex}`} className="clue-wrapper" style={{ position: 'relative', zIndex: isActive ? 9998 : undefined }}>
                         <button
-                          onClick={(e) => {
+                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
+                          onClick={() => {
                             if (!hasClue) return;
-                            
-                            // Toggle floating clue visibility
-                            if (floatingClue.show && floatingClue.type === 'col' && floatingClue.index === colIndex) {
-                              // Hide if same clue is clicked
-                              setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '' });
-                              selectWord(null);
-                              onWordSelect?.(null);
-                            } else {
-                              // Show new clue
-                              const word = { number: colNumber, startRow: 0, startCol: colIndex, length: numRows, direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
-                              selectWord(word,false);
-                              onWordSelect?.(word);
-                              
-                              // Prefer anchoring to the visible number inside the header for better alignment
-                              let rect = e.currentTarget.getBoundingClientRect();
-                              const numEl = e.currentTarget.querySelector('.col-number');
-                              if (numEl) rect = numEl.getBoundingClientRect();
-                              const gridRect = gridRef.current.getBoundingClientRect();
-                              const anchorRect = (numEl ? numEl.getBoundingClientRect() : e.currentTarget.getBoundingClientRect());
-                              const viewportWidth = window.innerWidth;
-                              const viewportHeight = window.innerHeight;
-                              
-                              // Compute viewport-fixed position so tooltip stays next to the clicked header
-                              // Use rect (viewport coordinates) directly and render tooltip with position: fixed
-                              let clueTopV = rect.top - 48; // place above by default
-                              let clueLeftV = rect.left + rect.width / 2;
-                              let transform = 'translateX(-50%)';
-                              let arrowClass = 'arrow-down';
-
-                              // If not enough space above, position below
-                              if (rect.top < 80) {
-                                clueTopV = rect.bottom + 10;
-                                arrowClass = 'arrow-up';
-                                transform = 'translateX(-50%)';
+                            const word = { number: colNumber, startRow: 0, startCol: colIndex, length: numRows, direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
+                            setActiveClueId(prev => {
+                              if (prev === clueId) {
+                                selectWord(null);
+                                onWordSelect?.(null);
+                                return null;
                               }
-
-                              // Clamp horizontally to viewport
-                              const cw = Math.min(300, Math.max(140, rect.width * 3));
-                              if (clueLeftV - cw / 2 < 8) clueLeftV = 8 + cw / 2;
-                              if (clueLeftV + cw / 2 > viewportWidth - 8) clueLeftV = viewportWidth - 8 - cw / 2;
-
-                              setFloatingClue({ 
-                                show: true, 
-                                clue: word.clue, 
-                                type: 'col', 
-                                index: colIndex, 
-                                top: clueTopV, 
-                                left: clueLeftV, 
-                                transform,
-                                arrowClass,
-                                position: 'fixed',
-                                width: cw,
-                                measuring: true,
-                                anchorRect
-                              });
-                            }
+                              selectWord(word, false);
+                              onWordSelect?.(word);
+                              return clueId;
+                            });
                           }}
-                          className={`flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                         >
                           <span className="col-number">{colNumber}</span>
                         </button>
+                        {isActive && hasClue && (
+                          <ClueTooltip 
+                            clueId={clueId}
+                            clue={puzzle.cluesVertical[colNumber]}
+                            onClose={() => {
+                              closeActiveClue();
+                              selectWord(null);
+                              onWordSelect?.(null);
+                            }}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -648,77 +519,44 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
               {/* Body row: row headers + cells */}
               <div style={{ display: 'flex' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.125rem' }}>
-                    {Array.from({ length: numRows }).map((_, rowIndex) => {
+                  {Array.from({ length: numRows }).map((_, rowIndex) => {
                     const rowNumber = rowIndex + 1;
                     const hasRowClue = puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber];
+                    const clueId = `row-${rowNumber}`;
+                    const isActive = activeClueId === clueId;
+                    
                     return (
-                      <div key={`row-head-${rowIndex}`} className="relative">
+                      <div key={`row-head-${rowIndex}`} className="clue-wrapper" style={{ position: 'relative', zIndex: isActive ? 9998 : undefined }}>
                         <button
-                          onClick={(e) => {
+                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
+                          onClick={() => {
                             if (!hasRowClue) return;
-                            
-                            // Toggle floating clue visibility
-                            if (floatingClue.show && floatingClue.type === 'row' && floatingClue.index === rowIndex) {
-                              // Hide if same clue is clicked
-                              setFloatingClue({ show: false, clue: '', type: '', index: -1, top: 0, left: 0, transform: '', arrowClass: '' });
-                              selectWord(null);
-                              onWordSelect?.(null);
-                            } else {
-                              // Show new clue
-                              const word = { number: rowNumber, startRow: rowIndex, startCol: 0, length: numCols, direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
+                            const word = { number: rowNumber, startRow: rowIndex, startCol: 0, length: numCols, direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
+                            setActiveClueId(prev => {
+                              if (prev === clueId) {
+                                selectWord(null);
+                                onWordSelect?.(null);
+                                return null;
+                              }
                               selectWord(word, false);
                               onWordSelect?.(word);
-                              
-                              // Prefer anchoring to the visible number inside the header for better alignment
-                              let rect = e.currentTarget.getBoundingClientRect();
-                              const numEl = e.currentTarget.querySelector('.row-number');
-                              if (numEl) rect = numEl.getBoundingClientRect();
-                              const gridRect = gridRef.current.getBoundingClientRect();
-                              const anchorRect = (numEl ? numEl.getBoundingClientRect() : e.currentTarget.getBoundingClientRect());
-                              const viewportWidth = window.innerWidth;
-                              const viewportHeight = window.innerHeight;
-                              
-                              // Compute viewport-fixed position for row clue
-                              // center vertically on the number element
-                              const estTooltipH = 120; // estimated tooltip height for centering
-                              let clueTopV = rect.top + rect.height / 2 - estTooltipH / 2;
-                              let clueLeftV = rect.left - 12; // try left by default
-                              let transform = 'translateY(-50%)';
-                              let arrowClass = 'arrow-right';
-
-                              // If no room on the left, put it on the right
-                              if (rect.left < 160) {
-                                clueLeftV = rect.right + 12;
-                                arrowClass = 'arrow-left';
-                                transform = 'translateY(-50%)';
-                              }
-
-                              // Clamp vertically within viewport
-                              const minTop = 8;
-                              const maxTop = viewportHeight - 8 - estTooltipH;
-                              if (clueTopV < minTop) clueTopV = minTop;
-                              if (clueTopV > maxTop) clueTopV = maxTop;
-
-                              setFloatingClue({
-                                show: true,
-                                clue: word.clue,
-                                type: 'row',
-                                index: rowIndex,
-                                top: clueTopV,
-                                left: clueLeftV,
-                                transform,
-                                arrowClass,
-                                position: 'fixed',
-                                width: 300,
-                                measuring: true,
-                                anchorRect
-                              });
-                            }
+                              return clueId;
+                            });
                           }}
-                          className={`flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                         >
                           <span className="row-number">{hasRowClue ? rowNumber : ''}</span>
                         </button>
+                        {isActive && hasRowClue && (
+                          <ClueTooltip 
+                            clueId={clueId}
+                            clue={puzzle.cluesHorizontal[rowNumber]}
+                            onClose={() => {
+                              closeActiveClue();
+                              selectWord(null);
+                              onWordSelect?.(null);
+                            }}
+                          />
+                        )}
                       </div>
                     );
                   })}
@@ -746,15 +584,25 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                           selectedWord={selectedWord}
                           row={rowIndex}
                           col={colIndex}
+                          activeClueId={activeClueId}
+                          setActiveClueId={setActiveClueId}
+                          closeActiveClue={closeActiveClue}
+                          getClueForNumber={(r, c) => {
+                            const rowNumber = r + 1;
+                            const colNumber = c + 1;
+                            const hasRowClue = puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber];
+                            const hasColClue = puzzle.cluesVertical && puzzle.cluesVertical[colNumber];
+                            if (hasRowClue && (!hasColClue || c === 0)) return puzzle.cluesHorizontal[rowNumber];
+                            if (hasColClue) return puzzle.cluesVertical[colNumber];
+                            return '';
+                          }}
                           onClick={handleCellClick}
                           onNumberClick={(r, c) => {
-                            // Determine if this number corresponds to a row or column clue
                             const rowNumber = r + 1;
                             const colNumber = c + 1;
                             const hasRowClue = puzzle.cluesHorizontal && puzzle.cluesHorizontal[rowNumber];
                             const hasColClue = puzzle.cluesVertical && puzzle.cluesVertical[colNumber];
 
-                            // Prefer row clue if this cell is in the first column header position, otherwise column clue
                             if (hasRowClue && (!hasColClue || c === 0)) {
                               const word = { number: rowNumber, startRow: r, startCol: 0, length: puzzle.cols || (currentGrid?.[r]?.length || 0), direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
                               if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'horizontal') {
@@ -788,7 +636,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
           </div>
         </div>
       </div>
-            {/* Timer Display - separated from game controls */}
+
+      {/* Timer Display */}
       <div className="text-center mt-4 space-y-3">
         <div className="inline-flex items-center gap-3 px-4 py-2 bg-gray-100 rounded-lg">
           <button
@@ -797,13 +646,11 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
             title={isPaused ? "Reprendre" : "Pause"}
           >
             {isPaused ? (
-              // Modern Play icon - triangle in circle
               <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <circle cx="12" cy="12" r="10"/>
                 <polygon fill="currentColor" points="10,8 16,12 10,16"/>
               </svg>
             ) : (
-              // Modern Pause icon - two bars in circle
               <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="10" y1="15" x2="10" y2="9"/>
@@ -817,26 +664,18 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
             className="p-2 hover:bg-gray-200 rounded-full transition-colors"
             title="Remettre à zéro le chrono"
           >
-            {/* Modern Reset/Refresh icon */}
             <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
           </button>
           
-          {/* Modern Timer icon */}
           <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
             <circle cx="12" cy="13" r="8"/>
             <path d="m12 9-2 3h4l-2-3"/>
             <path d="M12 7V2m0 0L9 5m3-3 3 3"/>
           </svg>
           
-          <span className={`text-sm font-medium ${isPaused ? 'text-orange-600' : 'text-gray-700'}`}>
-            Temps: {(() => {
-              const minutes = Math.floor(currentTime / 60);
-              const seconds = currentTime % 60;
-              return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            })()} {isPaused && '(Pause)'}
-          </span>
+          <TimerDisplay getElapsedTime={getElapsedTime} isPaused={isPaused} />
         </div>
         
         {/* Navigation Controls */}
@@ -855,7 +694,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                 preferredDirection === 'up' 
                   ? 'bg-green-500 hover:bg-green-600 text-white' 
                   : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
+              }`}isPaused
               disabled={!selectedCell}
               title="Définir direction automatique: haut"
             >
