@@ -157,10 +157,25 @@ const getPuzzlesByDate = async (req, res) => {
 
 const getAllPuzzles = async (req, res) => {
   try {
-    const puzzles = await prisma.crosswordPuzzle.findMany({
-      where: { isPublished: true },
-      orderBy: { date: 'desc' },
-    });
+    const { language, page = 1, limit = 10 } = req.query;
+    
+    const where = { isPublished: true };
+    if (language) {
+      where.language = language;
+    }
+    
+    const skip = (page - 1) * limit;
+    const take = parseInt(limit);
+    
+    const [puzzles, total] = await Promise.all([
+      prisma.crosswordPuzzle.findMany({
+        where,
+        orderBy: { date: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.crosswordPuzzle.count({ where })
+    ]);
 
     const parsedPuzzles = puzzles.map(puzzle => {
       const originalGrid = JSON.parse(puzzle.grid);
@@ -183,7 +198,15 @@ const getAllPuzzles = async (req, res) => {
       };
     });
 
-    res.json(parsedPuzzles);
+    res.json({
+      puzzles: parsedPuzzles,
+      pagination: {
+        page: parseInt(page),
+        limit: take,
+        total,
+        totalPages: Math.ceil(total / take)
+      }
+    });
   } catch (error) {
     console.error('Get all puzzles error:', error);
     res.status(500).json({ error: 'Internal server error' });

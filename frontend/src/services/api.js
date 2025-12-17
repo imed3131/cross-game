@@ -80,7 +80,7 @@ export const playerAPI = {
     return api.get(`/player/date/${formatDate(date)}`);
   },
   getAllPuzzleDates: () => api.get('/player/dates'),
-  getAllPuzzles: () => api.get('/player/all'),
+  getAllPuzzles: (params) => api.get('/player/all', { params }),
   submitSolution: (id, solutionData) => api.post(`/player/submit/${id}`, solutionData),
 };
 

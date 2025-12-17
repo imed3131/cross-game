@@ -29,13 +29,19 @@ export const usePuzzles = () => {
   }, []);
 
   // Fetch all published puzzles
-  const fetchAllPuzzles = useCallback(async () => {
+  const fetchAllPuzzles = useCallback(async (options = {}) => {
     try {
       setLoading(true);
-      const response = await playerAPI.getAllPuzzles();
-      setTodaysPuzzles(response.data);
-      if (response.data.length > 0 && !selectedPuzzle) {
-        setSelectedPuzzle(response.data[0]);
+      const { language, page = 1, limit = 10 } = options;
+      const params = new URLSearchParams();
+      if (language) params.append('language', language);
+      params.append('page', page);
+      params.append('limit', limit);
+      
+      const response = await playerAPI.getAllPuzzles(params);
+      setTodaysPuzzles(response.data.puzzles);
+      if (response.data.puzzles.length > 0 && !selectedPuzzle) {
+        setSelectedPuzzle(response.data.puzzles[0]);
       }
       return response;
     } catch (error) {
@@ -43,6 +49,23 @@ export const usePuzzles = () => {
   setError('Failed to load puzzles');
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  // Fetch puzzles for PuzzleList component (doesn't update global state)
+  const fetchPuzzlesForList = useCallback(async (options = {}) => {
+    try {
+      const { language, page = 1, limit = 10 } = options;
+      const params = new URLSearchParams();
+      if (language) params.append('language', language);
+      params.append('page', page);
+      params.append('limit', limit);
+      
+      const response = await playerAPI.getAllPuzzles(params);
+      return response;
+    } catch (error) {
+      console.error('Failed to fetch puzzles for list:', error);
+      throw error;
     }
   }, []);
 
@@ -114,6 +137,7 @@ export const usePuzzles = () => {
     error,
     fetchTodaysPuzzles,
   fetchAllPuzzles,
+  fetchPuzzlesForList,
     fetchPuzzlesByDate,
     fetchPuzzleDates,
     submitSolution,

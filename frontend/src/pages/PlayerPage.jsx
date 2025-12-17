@@ -26,6 +26,7 @@ const PlayerPage = () => {
     loading,
   fetchPuzzlesByDate,
   fetchAllPuzzles,
+  fetchPuzzlesForList,
     submitSolution,
   } = usePuzzles();
 
@@ -285,10 +286,8 @@ const PlayerPage = () => {
           {showArchive && (
             <div className="mb-6">
               <PuzzleList
-                puzzleDates={puzzleDates}
                 puzzles={todaysPuzzles}
-                fetchPuzzlesByDate={fetchPuzzlesByDate}
-                fetchAllPuzzles={fetchAllPuzzles}
+                fetchAllPuzzles={fetchPuzzlesForList}
                 loading={loading}
                 onSelectPuzzle={(p) => {
                   console.debug('PlayerPage: onSelectPuzzle called', p && p.id);
