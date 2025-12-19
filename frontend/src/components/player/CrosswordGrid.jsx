@@ -41,6 +41,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const [preferredDirection, setPreferredDirection] = useState('right');
   const lastCloseRef = useRef(0);
   const lastKeypressRef = useRef(0);
+  // Detect touch / mobile environment (used to switch hover -> tap behaviour)
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   // Helper to decide if hovering should open a clue. Blocks opens while user is typing
   // (an input inside the grid has focus) and avoids immediate reopen after a close.
@@ -65,6 +67,38 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     // eslint-disable-next-line no-console
     console.debug('visibleClueId changed ->', visibleClueId);
   }, [visibleClueId]);
+
+  // Update touch-capable / no-hover detection. Uses matchMedia('(hover: none)') and fallbacks.
+  useEffect(() => {
+    const updateIsTouch = () => {
+      if (typeof window === 'undefined') return;
+      let touch = false;
+      try {
+        const mq = window.matchMedia && window.matchMedia('(hover: none)');
+        const hasTouchPoints = typeof navigator !== 'undefined' && ((navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints && navigator.msMaxTouchPoints > 0));
+        if (mq) {
+          // If the UA explicitly reports no-hover, prefer that (this handles hybrid devices correctly)
+          touch = mq.matches;
+        } else {
+          touch = hasTouchPoints || ('ontouchstart' in window);
+        }
+      } catch (e) {
+        touch = ('ontouchstart' in window);
+      }
+      setIsTouchDevice(Boolean(touch));
+    };
+
+    updateIsTouch();
+    const mql = window.matchMedia && window.matchMedia('(hover: none)');
+    if (mql && typeof mql.addEventListener === 'function') mql.addEventListener('change', updateIsTouch);
+    window.addEventListener('resize', updateIsTouch, { passive: true });
+    window.addEventListener('orientationchange', updateIsTouch, { passive: true });
+    return () => {
+      if (mql && typeof mql.removeEventListener === 'function') mql.removeEventListener('change', updateIsTouch);
+      window.removeEventListener('resize', updateIsTouch);
+      window.removeEventListener('orientationchange', updateIsTouch);
+    };
+  }, []);
 
   // Close any open clue when focus moves to an input inside the grid (typing started)
   useEffect(() => {
@@ -137,10 +171,28 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   // Handle click outside to close clue
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (visibleClueId && gridRef.current && !gridRef.current.contains(event.target)) {
-        closeActiveClue();
-        selectWord(null);
-        onWordSelect?.(null);
+      if (!visibleClueId) return;
+      let target = event.target;
+      // If the target is a text node, use its parent element
+      if (target && target.nodeType === 3) target = target.parentElement;
+      const clickedInsideGrid = gridRef.current && target && gridRef.current.contains(target);
+      const clickedOnClue = target && target.closest && target.closest('.floating-clue');
+      const clickedOnAnchor = target && target.closest && target.closest('.clue-anchor');
+
+      if (isTouchDevice) {
+        // On touch devices, close when tapping anywhere except the clue itself or an anchor
+        if (!clickedOnClue && !clickedOnAnchor) {
+          closeActiveClue();
+          selectWord(null);
+          onWordSelect?.(null);
+        }
+      } else {
+        // Desktop: close when clicking outside the whole grid
+        if (!clickedInsideGrid) {
+          closeActiveClue();
+          selectWord(null);
+          onWordSelect?.(null);
+        }
       }
     };
 
@@ -163,7 +215,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       document.removeEventListener('touchstart', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [visibleClueId, selectWord, onWordSelect]);
+  }, [visibleClueId, selectWord, onWordSelect, isTouchDevice, closeActiveClue]);
 
   const handleResetTimer = () => {
     resetTimer();
@@ -296,9 +348,11 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
 
   const handleCellMouseLeave = (row, col) => {
     setHoveredCell({ row: -1, col: -1 });
-    const id = `cell-${row}-${col}`;
-    if (visibleClueId === id) {
-      closeActiveClue();
+    if (!isTouchDevice) {
+      const id = `cell-${row}-${col}`;
+      if (visibleClueId === id) {
+        closeActiveClue();
+      }
     }
   };
 
@@ -532,19 +586,22 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         key={`col-head-${colIndex}`}
                         className="clue-wrapper"
                         style={{ position: 'relative', zIndex: isActive ? 9998 : undefined }}
-                        onMouseEnter={() => (typeof handleHeaderHover === 'function' ? handleHeaderHover('col', colNumber) : null)}
-                        onMouseLeave={() => closeActiveClue()}
-                        onPointerEnter={() => (typeof handleHeaderHover === 'function' ? handleHeaderHover('col', colNumber) : null)}
-                        onPointerLeave={() => closeActiveClue()}
+                        onMouseEnter={() => (!isTouchDevice && typeof handleHeaderHover === 'function' ? handleHeaderHover('col', colNumber) : null)}
+                        onMouseLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
+                        onPointerEnter={() => (!isTouchDevice && typeof handleHeaderHover === 'function' ? handleHeaderHover('col', colNumber) : null)}
+                        onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
                           className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice colonne ${colNumber}`}
+                          aria-expanded={isActive}
                           onClick={() => {
                             if (!hasClue) return;
                             const word = { number: colNumber, startRow: 0, startCol: colIndex, length: numRows, direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
                             selectWord(word, false);
                             onWordSelect?.(word);
+                            // On touch devices open the clue on tap (instead of hover)
+                            if (isTouchDevice) openClueUser(clueId);
                           }}
                         >
                           <span className="col-number">{colNumber}</span>
@@ -584,19 +641,22 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         key={`row-head-${rowIndex}`}
                         className="clue-wrapper"
                         style={{ position: 'relative', zIndex: isActive ? 9998 : undefined }}
-                        onMouseEnter={() => (typeof handleHeaderHover === 'function' ? handleHeaderHover('row', rowNumber) : null)}
-                        onMouseLeave={() => closeActiveClue()}
-                        onPointerEnter={() => (typeof handleHeaderHover === 'function' ? handleHeaderHover('row', rowNumber) : null)}
-                        onPointerLeave={() => closeActiveClue()}
+                        onMouseEnter={() => (!isTouchDevice && typeof handleHeaderHover === 'function' ? handleHeaderHover('row', rowNumber) : null)}
+                        onMouseLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
+                        onPointerEnter={() => (!isTouchDevice && typeof handleHeaderHover === 'function' ? handleHeaderHover('row', rowNumber) : null)}
+                        onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
                           className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice ligne ${rowNumber}`}
+                          aria-expanded={isActive}
                           onClick={() => {
                             if (!hasRowClue) return;
                             const word = { number: rowNumber, startRow: rowIndex, startCol: 0, length: numCols, direction: 'horizontal', clue: puzzle.cluesHorizontal[rowNumber] };
                             selectWord(word, false);
                             onWordSelect?.(word);
+                            // On touch devices open the clue on tap (instead of hover)
+                            if (isTouchDevice) openClueUser(clueId);
                           }}
                         >
                           <span className="row-number">{hasRowClue ? rowNumber : ''}</span>
@@ -641,6 +701,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                           language={language}
                           cellNumber={null}
                           selectedWord={selectedWord}
+                          isTouchDevice={isTouchDevice}
                           row={rowIndex}
                           col={colIndex}
                           getClueForNumber={(r, c) => {
@@ -669,6 +730,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                                 selectWord(word);
                                 onWordSelect?.(word);
                               }
+                              if (isTouchDevice) openClueUser(`row-${rowNumber}`);
                             } else if (hasColClue) {
                               const word = { number: colNumber, startRow: 0, startCol: c, length: puzzle.rows || (currentGrid?.length || 0), direction: 'vertical', clue: puzzle.cluesVertical[colNumber] };
                               if (selectedWord && selectedWord.number === word.number && selectedWord.direction === 'vertical') {
@@ -678,6 +740,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                                 selectWord(word);
                                 onWordSelect?.(word);
                               }
+                              if (isTouchDevice) openClueUser(`col-${colNumber}`);
                             }
                           }}
                           onMouseEnter={() => handleCellMouseEnter(rowIndex, colIndex)}
@@ -703,12 +766,12 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
             title={isPaused ? "Reprendre" : "Pause"}
           >
             {isPaused ? (
-              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/>
                 <polygon fill="currentColor" points="10,8 16,12 10,16"/>
               </svg>
             ) : (
-              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
                 <circle cx="12" cy="12" r="10"/>
                 <line x1="10" y1="15" x2="10" y2="9"/>
                 <line x1="14" y1="15" x2="14" y2="9"/>
@@ -721,12 +784,12 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
             className="p-2 hover:bg-gray-200 rounded-full transition-colors"
             title="Remettre à zéro le chrono"
           >
-            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
             </svg>
           </button>
           
-          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
             <circle cx="12" cy="13" r="8"/>
             <path d="m12 9-2 3h4l-2-3"/>
             <path d="M12 7V2m0 0L9 5m3-3 3 3"/>

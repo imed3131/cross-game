@@ -20,6 +20,7 @@ const CrosswordCell = ({
   language = 'FR',
   className = ''
   , getClueForNumber, canOpenClueOnHover
+  , isTouchDevice
 }) => {
   const { visibleClueId, persistentClueId, openClueHover, closeClueHover, closeClueUser } = useClue();
   const inputRef = useRef(null);
@@ -165,6 +166,7 @@ const CrosswordCell = ({
           }}
           onMouseEnter={(e) => {
             e.stopPropagation();
+            if (isTouchDevice) return;
             const canOpen = typeof canOpenClueOnHover === 'function' ? (canOpenClueOnHover() || (typeof window !== 'undefined' && window.__DEBUG_SHOW_HOVER)) : true;
             // eslint-disable-next-line no-console
             console.debug('[ClueHover] cell hover', { row, col, canOpen });
