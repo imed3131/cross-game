@@ -176,7 +176,7 @@ const CrosswordCell = ({
             const id = `cell-${row}-${col}`;
             openClueHover(id);
           }}
-          className="absolute top-0 left-0 text-xs leading-none p-0.5 text-gray-600 font-medium w-5 h-5 flex items-center justify-center rounded border border-blue-400 bg-white hover:bg-blue-50 transition-colors"
+          className={`absolute top-0 left-0 text-xs leading-none p-0.5 text-gray-600 font-medium w-5 h-5 flex items-center justify-center rounded ${isTouchDevice ? 'border border-blue-400 bg-white hover:bg-blue-50' : 'border border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-colors'}`}
         >
           {cellNumber}
         </button>

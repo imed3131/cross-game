@@ -592,7 +592,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
-                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
+                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${isTouchDevice ? (selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50') : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice colonne ${colNumber}`}
                           aria-expanded={isActive}
                           onClick={() => {
@@ -647,7 +647,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
-                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
+                          className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${isTouchDevice ? (selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50') : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice ligne ${rowNumber}`}
                           aria-expanded={isActive}
                           onClick={() => {
@@ -804,77 +804,57 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
           <div className="text-xs text-gray-500 text-center">Cliquez pour définir la direction de navigation automatique</div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => {
-                if (selectedCell) {
-                  setPreferredDirection('up');
-                  handleCellNavigation('up', selectedCell.row, selectedCell.col);
-                }
-              }}
-              className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
-                preferredDirection === 'up' 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-              disabled={!selectedCell}
-              title="Définir direction automatique: haut"
-            >
+              onClick={() => setPreferredDirection('up')}
+               className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                 preferredDirection === 'up' 
+                   ? 'bg-green-500 hover:bg-green-600 text-white' 
+                   : 'bg-blue-500 hover:bg-blue-600 text-white'
+               }`}
+               disabled={!selectedCell}
+               title="Définir direction automatique: haut"
+             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m18 15-6-6-6 6"/>
               </svg>
             </button>
             <button
-              onClick={() => {
-                if (selectedCell) {
-                  setPreferredDirection('left');
-                  handleCellNavigation('left', selectedCell.row, selectedCell.col);
-                }
-              }}
-              className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
-                preferredDirection === 'left' 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-              disabled={!selectedCell}
-              title="Définir direction automatique: gauche"
-            >
+              onClick={() => setPreferredDirection('left')}
+               className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                 preferredDirection === 'left' 
+                   ? 'bg-green-500 hover:bg-green-600 text-white' 
+                   : 'bg-blue-500 hover:bg-blue-600 text-white'
+               }`}
+               disabled={!selectedCell}
+               title="Définir direction automatique: gauche"
+             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6"/>
               </svg>
             </button>
             <button
-              onClick={() => {
-                if (selectedCell) {
-                  setPreferredDirection('down');
-                  handleCellNavigation('down', selectedCell.row, selectedCell.col);
-                }
-              }}
-              className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
-                preferredDirection === 'down' 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-              disabled={!selectedCell}
-              title="Définir direction automatique: bas"
-            >
+              onClick={() => setPreferredDirection('down')}
+               className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                 preferredDirection === 'down' 
+                   ? 'bg-green-500 hover:bg-green-600 text-white' 
+                   : 'bg-blue-500 hover:bg-blue-600 text-white'
+               }`}
+               disabled={!selectedCell}
+               title="Définir direction automatique: bas"
+             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m6 9 6 6 6-6"/>
               </svg>
             </button>
             <button
-              onClick={() => {
-                if (selectedCell) {
-                  setPreferredDirection('right');
-                  handleCellNavigation('right', selectedCell.row, selectedCell.col);
-                }
-              }}
-              className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
-                preferredDirection === 'right' 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-blue-500 hover:bg-blue-600 text-white'
-              }`}
-              disabled={!selectedCell}
-              title="Définir direction automatique: droite"
-            >
+              onClick={() => setPreferredDirection('right')}
+               className={`w-10 h-10 rounded flex items-center justify-center text-sm font-bold transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
+                 preferredDirection === 'right' 
+                   ? 'bg-green-500 hover:bg-green-600 text-white' 
+                   : 'bg-blue-500 hover:bg-blue-600 text-white'
+               }`}
+               disabled={!selectedCell}
+               title="Définir direction automatique: droite"
+             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m9 18 6-6-6-6"/>
               </svg>
