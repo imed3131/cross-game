@@ -378,7 +378,7 @@ const PlayerPage = () => {
                   initial={{ opacity: 0, x: -50 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 2.4, duration: 0.8 }}
-                  className="backdrop-blur-lg bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-6 lg:p-8 shadow-2xl"
+                  className="backdrop-blur-lg maxwidth-full bg-white/10 rounded-2xl lg:rounded-3xl border border-white/20 p-3 sm:p-6 lg:p-8 shadow-2xl"
                 >
                   {/* Grid Card */}
                   <div className="player-grid-force-ltr">

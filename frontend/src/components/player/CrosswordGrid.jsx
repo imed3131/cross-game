@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCrosswordGame } from '../../hooks/useCrosswordGame';
 import CrosswordCell from './CrosswordCell';
@@ -37,6 +38,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
   const scrollRef = useRef(null);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [cellRefs, setCellRefs] = useState({});
+  const anchorRefs = useRef({});
   const [hoveredCell, setHoveredCell] = useState({ row: -1, col: -1 });
   const [preferredDirection, setPreferredDirection] = useState('right');
   const lastCloseRef = useRef(0);
@@ -383,61 +385,110 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
     return null;
   };
 
-  // Clue component that's rendered inside each wrapper
-  const ClueTooltip = ({ clueId, clue, onClose }) => {
-    const [position, setPosition] = useState({ side: 'bottom', arrowOffset: 0 });
+  // Clue component that's rendered inside each wrapper — rendered via portal so it isn't clipped by scrollable ancestors
+  const ClueTooltip = ({ clueId, clue, buttonRef, onClose }) => {
+    const [pos, setPos] = useState({ x: 0, y: 0, side: 'top', arrowOffset: 0 });
     const clueRef = useRef(null);
-    
+
     useLayoutEffect(() => {
-      if (!clueRef.current) return;
-      
+      if (!clueRef.current || !buttonRef || !buttonRef.current) return;
+
       const clueEl = clueRef.current;
       const compute = () => {
-        const wrapper = clueEl.closest('.clue-wrapper');
-        const anchor = wrapper?.querySelector('.clue-anchor');
-        if (!wrapper || !anchor) return;
-        
-        const wrapperRect = wrapper.getBoundingClientRect();
+        const anchor = buttonRef.current;
+        if (!anchor) return;
+
+        // Limit tooltip width so long clues wrap and we can measure reliably
+        clueEl.style.maxWidth = 'min(90vw, 520px)';
+        clueEl.style.boxSizing = 'border-box';
+
         const anchorRect = anchor.getBoundingClientRect();
-        const clueRect = clueEl.getBoundingClientRect();
-        
-        // Find nearest clipping ancestor
-        let clipAncestor = wrapper.parentElement;
-        while (clipAncestor && clipAncestor !== document.body) {
-          const style = getComputedStyle(clipAncestor);
-          if (style.overflow !== 'visible' || style.overflowX !== 'visible' || style.overflowY !== 'visible') {
-            break;
-          }
-          clipAncestor = clipAncestor.parentElement;
-        }
-        const clipRect = clipAncestor ? clipAncestor.getBoundingClientRect() : { 
-          top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth 
-        };
-        
-        // For both columns and rows we render the clue above the anchor (side = 'top')
-        const side = 'top';
-        
-        // Anchor center in viewport coords
+        let clueRect = clueEl.getBoundingClientRect();
+
         const anchorCenterX = anchorRect.left + anchorRect.width / 2;
-        const anchorCenterY = anchorRect.top + anchorRect.height / 2;
-        
-        // Preferred clue left (relative to wrapper)
-        let clueLeft = anchorCenterX - clueRect.width / 2 - wrapperRect.left;
-        const minLeft = clipRect.left - wrapperRect.left + 8; // leave small margin
-        const maxLeft = clipRect.right - wrapperRect.left - clueRect.width - 8;
-        if (clueLeft < minLeft) clueLeft = minLeft;
-        if (clueLeft > maxLeft) clueLeft = maxLeft;
-        
-        // Arrow offset relative to clue box (in px)
-        let arrowOffset = anchorCenterX - (wrapperRect.left + clueLeft);
-        const minOffset = 12;
-        const maxOffset = Math.max(minOffset, clueRect.width - 12);
+
+        // Space available above / below the anchor
+        const availableAbove = anchorRect.top;
+        const availableBelow = window.innerHeight - anchorRect.bottom;
+
+        const margin = 12; // viewport margin
+        // Prefer showing above and attach to the anchor from the top
+        let side = 'top';
+
+        // If it fits fully above, keep it above
+        if (availableAbove >= clueRect.height + 16) {
+          side = 'top';
+        } else if (availableBelow >= clueRect.height + 16) {
+          // If it doesn't fit above but fits below, use bottom
+          side = 'bottom';
+        } else {
+          // If neither side fits fully, prefer top but clamp height to available space
+          side = 'top';
+        }
+
+        // Determine maximum available vertical space on chosen side and clamp height
+        const availableSpace = side === 'top' ? Math.max(40, availableAbove - margin) : Math.max(40, availableBelow - margin);
+        const maxHeight = Math.max(80, Math.min(availableSpace, window.innerHeight - 40));
+
+        // Apply height constraint and allow scrolling if needed (scrollbars are visually hidden)
+        clueEl.style.maxHeight = `${maxHeight}px`;
+        clueEl.style.overflowY = 'auto';
+
+        // Re-measure after applying constraints
+        clueRect = clueEl.getBoundingClientRect();
+
+        // Calculate X (centered on anchor, clamped to viewport) and allow horizontal shifting to keep on-screen
+        const halfWidth = clueRect.width / 2;
+        const minX = halfWidth + 8;
+        const maxX = Math.max(minX, window.innerWidth - halfWidth - 8);
+        // Initial clamped position
+        let x = Math.min(maxX, Math.max(minX, anchorCenterX));
+
+        // Prevent large shifts away from the anchor so tooltip doesn't appear centered when it shouldn't
+        const maxShift = 80; // px, adjust to taste
+        const shift = x - anchorCenterX;
+        if (Math.abs(shift) > maxShift) {
+          x = anchorCenterX + Math.sign(shift) * maxShift;
+          // ensure we still stay inside viewport
+          x = Math.min(maxX, Math.max(minX, x));
+        }
+
+        // Calculate Y: attach to top of anchor when possible
+        let y;
+        if (side === 'top') {
+          // bottom edge of the tooltip should be 8px above anchor
+          let bottomY = anchorRect.top - 8;
+          // ensure tooltip top doesn't go beyond viewport; if it does and there's more space below, flip
+          const topEdge = bottomY - clueRect.height;
+          if (topEdge < 8) {
+            // try flipping if bottom has more room to show full tooltip
+            if (availableBelow >= clueRect.height + 16) {
+              side = 'bottom';
+              y = anchorRect.bottom + 8;
+            } else {
+              // keep it on top but clamp by reducing maxHeight (already applied) and position so top is at 8
+              bottomY = clueRect.height + 8;
+              y = bottomY;
+            }
+          } else {
+            y = bottomY;
+          }
+        } else {
+          // bottom
+          y = anchorRect.bottom + 8;
+        }
+
+        // Arrow offset inside the clue box — allow it to come closer to the edge for small anchors
+        let arrowOffset = anchorCenterX - (x - clueRect.width / 2);
+        const minOffset = 8; // allow arrow to be closer to edge for small header buttons
+        const maxOffset = Math.max(minOffset, clueRect.width - 8);
         if (arrowOffset < minOffset) arrowOffset = minOffset;
         if (arrowOffset > maxOffset) arrowOffset = maxOffset;
-        
-        setPosition({ side, arrowOffset, clueLeft });
+
+        setPos({ x, y, side, arrowOffset, maxHeight });
       };
-      
+
+      // Compute immediately and on resize/scroll
       compute();
       window.addEventListener('resize', compute);
       window.addEventListener('scroll', compute, true);
@@ -445,37 +496,31 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         window.removeEventListener('resize', compute);
         window.removeEventListener('scroll', compute, true);
       };
-    }, [clueId]);
-    
-    const getPositionStyles = () => {
-      const { side } = position;
-      const base = { position: 'absolute', zIndex: 9999 };
-      
-      if (side === 'bottom') {
-        // If a custom clueLeft was computed use that; otherwise center
-        return position.clueLeft !== undefined ? { ...base, top: 'calc(100% + 8px)', left: `${position.clueLeft}px`, transform: 'none' } : { ...base, top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' };
-      } else if (side === 'top') {
-        return position.clueLeft !== undefined ? { ...base, bottom: 'calc(100% + 8px)', left: `${position.clueLeft}px`, transform: 'none' } : { ...base, bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' };
-       } else if (side === 'right') {
-         return { ...base, left: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' };
-       } else {
-         return { ...base, right: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' };
-       }
-     };
-    
+    }, [clueId, buttonRef, language]);
+
+    // Nothing server-side
+    if (typeof document === 'undefined') return null;
+
     const arrowClassMap = { top: 'arrow-down', bottom: 'arrow-up', left: 'arrow-right', right: 'arrow-left' };
-    const arrowClass = arrowClassMap[position.side] || 'arrow-down';
+    const arrowClass = arrowClassMap[pos.side] || 'arrow-down';
     const clueNumber = clueId.startsWith('col-') ? clueId.split('-')[1] : clueId.split('-')[1];
-    
-    return (
-      <div 
+
+    return createPortal(
+      <div
         ref={clueRef}
         className={`floating-clue ${arrowClass} ${language === 'ar' ? 'rtl' : ''}`}
         data-visible="true"
         style={{
-          ...getPositionStyles(),
-          '--arrow-left': position.side === 'top' || position.side === 'bottom' ? `${position.arrowOffset}px` : undefined,
-          '--arrow-top': position.side === 'left' || position.side === 'right' ? `${position.arrowOffset}px` : undefined,
+          position: 'fixed',
+          left: `${pos.x}px`,
+          top: `${pos.y}px`,
+          transform: pos.side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+          zIndex: 9999,
+          maxWidth: 'min(90vw, 520px)',
+          maxHeight: pos.maxHeight ? `${pos.maxHeight}px` : undefined,
+          overflowY: 'auto',
+          '--arrow-left': pos.side === 'top' || pos.side === 'bottom' ? `${pos.arrowOffset}px` : undefined,
+          '--arrow-top': pos.side === 'left' || pos.side === 'right' ? `${pos.arrowOffset}px` : undefined,
         }}
         onClick={(e) => e.stopPropagation()}
         onMouseEnter={(e) => e.stopPropagation()}
@@ -484,10 +529,10 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
         onFocus={(e) => e.stopPropagation()}
         onBlur={(e) => e.stopPropagation()}
       >
-        <button 
-          className="clue-close" 
+        <button
+          className="clue-close"
           onClick={onClose}
-          aria-label="Fermer" 
+          aria-label="Fermer"
           title="Fermer"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -498,7 +543,8 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
           <div className="clue-badge">Indice {clueNumber}</div>
           <div className={`clue-body ${language === 'ar' ? 'font-arabic' : ''}`}>{clue}</div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   };
 
@@ -568,7 +614,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
       </div>
 
       <div className="flex justify-center mb-4">
-        <div ref={scrollRef} className={`w-full overflow-visible flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
+        <div ref={scrollRef} className={`w-full grid-scroll-container flex ${isOverflowing ? 'justify-start' : 'justify-center'}`}>
           <div className="w-auto">
             <div className="player-grid-force-ltr" dir="ltr" style={{ direction: 'ltr', width: 'max-content' }}>
               {/* Top header row */}
@@ -592,6 +638,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
+                          ref={(el) => { anchorRefs.current[clueId] = el; }}
                           className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasClue ? `cursor-pointer ${isTouchDevice ? (selectedWord && selectedWord.number === colNumber && selectedWord.direction === 'vertical' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50') : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice colonne ${colNumber}`}
                           aria-expanded={isActive}
@@ -610,6 +657,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                           <ClueTooltip 
                             clueId={clueId}
                             clue={puzzle.cluesVertical[colNumber]}
+                            buttonRef={{ current: anchorRefs.current[clueId] }}
                             onClose={() => {
                               if (persistentClueId === clueId) {
                                 closeClueUser({ force: true });
@@ -647,6 +695,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                         onPointerLeave={() => { if (!isTouchDevice) closeActiveClue(); }}
                       >
                         <button
+                          ref={(el) => { anchorRefs.current[clueId] = el; }}
                           className={`clue-anchor flex items-center justify-center text-xs text-gray-700 bg-gray-100/40 rounded-sm p-1 h-8 w-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12 border-2 transition-colors ${hasRowClue ? `cursor-pointer ${isTouchDevice ? (selectedWord && selectedWord.number === rowNumber && selectedWord.direction === 'horizontal' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50') : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700'}` : 'border-gray-300 opacity-30 cursor-not-allowed'}`}
                           aria-label={`Indice ligne ${rowNumber}`}
                           aria-expanded={isActive}
@@ -665,6 +714,7 @@ const CrosswordGrid = ({ puzzle, onCellSelect, onWordSelect, resetGame: external
                           <ClueTooltip 
                             clueId={clueId}
                             clue={puzzle.cluesHorizontal[rowNumber]}
+                            buttonRef={{ current: anchorRefs.current[clueId] }}
                             onClose={() => {
                               if (persistentClueId === clueId) {
                                 closeClueUser({ force: true });
